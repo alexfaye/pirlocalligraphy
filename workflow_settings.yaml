@@ -1,0 +1,9 @@
+defaultProject: bigquery-test-march
+defaultLocation: australia-southeast1
+defaultDataset: pirlo_calligraphy
+defaultAssertionDataset: dataform_assertions
+dataformCoreVersion: 3.0.52
+vars:
+  GA4_DATASET: analytics_454895025
+  LOCAL_TIMEZONE: Ausstralia/Adelaide
+  OUTPUTS_DATASE: pirlo_calligraphy
