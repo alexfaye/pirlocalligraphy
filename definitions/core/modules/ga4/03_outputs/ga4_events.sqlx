@@ -1,5 +1,11 @@
 config {
     type: "incremental",
     description: "This output event table are ready for Data Studio which is unnested, cleaned, clustered data with several fixes",
-     
+    schema: dataform.projectConfig.vars.OUTPUTS_DATASET,
+    bigquery: {
+        partitionBy: "event_date",
+        clusteredBy: ["event_date", "session_id"],
+        labels:
+    },
+    columns: require("inclues/core/documentation/helpers.js").ga4Events
 }
