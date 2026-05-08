@@ -1,0 +1,5 @@
+config {
+    type: "incremental",
+    description: "This output event table are ready for Data Studio which is unnested, cleaned, clustered data with several fixes",
+     
+}
