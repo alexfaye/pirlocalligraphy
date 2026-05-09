@@ -6,5 +6,5 @@ config {
         partitionBy: "event_date",
         clusteredBy: ["event_date", "session_id"]
     },
-    columns: require("inclues/core/documentation/helpers.js").ga4Events
+    columns: require("includes/core/documentation/helpers.js").ga4Events
 }
