@@ -4,7 +4,11 @@ config {
     schema: dataform.projectConfig.vars.OUTPUTS_DATASET,
     bigquery: {
         partitionBy: "event_date",
-        clusteredBy: ["event_date", "session_id"]
+        clusterBy: ["event_date", "session_id"]
     },
     columns: require("includes/core/documentation/helpers.js").ga4Events
+}
+
+js{
+    const {helpers} = require("includes/core/modules/ga4/helpers");
 }
