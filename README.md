@@ -1,4 +1,4 @@
-# Pirlo Calligraphy eCoomerce GA4 Analysis with Dataform & Data Studio
+# Pirlo Calligraphy eCommerce GA4 Analysis with Dataform & Data Studio
 This is GA4 analysis of pirlocalligraphy.com which is a Woocommerce-based ecommerce website selling Pirlo's Chinese calligaphy artworks. The events_**** tables were automatically integrated from GA4 to BigQuery on a daily basis since 30/03/2026.
 
 ## 03_outputs/ga4_events.sqlx
@@ -36,20 +36,15 @@ The click_ids are then regenerated. Whenever specific Click IDs are detected eit
 Finally, the condition WHERE event_date >= date_checkpoint is intentionally placed in this CTE. One reason is to preserve the reusability and general-purpose nature of the upstream foundational modules. Another reason is that in BigQuery, as long as the CTE chain remains a purely linear data flow (without complex aggregations such as GROUP BY operations or window functions interrupting the execution plan), placing the WHERE clause at the first layer or at the final layer results in exactly the same underlying compute cost and scanned bytes (billing).
 
 ### stage_create_fixed_traffic_source
-
-
-
+Fixes several attribution issues: ad traffic containing gclid is often broken and misclassified by GA4 as organic or referral traffic; traffic coming from the Google app or social media apps may appear as android-app://com... package names; and payment redirects such as PayPal, if not excluded, can interrupt the original traffic session.
 
 ### stage_add_meta_info
-
-
-
-
+Resolves the following issues: generates local time fields timestamp_local and date_local directly based on configuration variables; filters out Measurement Protocol server-side events that can distort frontend engagement analysis such as bounce rate; combines the user ID and session timestamp into a hash to generate a truly globally unique Session ID; and since page_location contains both the domain and URL parameters — making it unsuitable for direct page traffic aggregation — uses an RFC 3986–compliant regular expression to extract a clean page path field (path).
 
 ### stage_dedupe_by_event_id
+Resolves the following issues: network retries can cause BigQuery to receive completely identical duplicate events, so a QUALIFY ROW_NUMBER() ... = 1 mechanism is used to precisely deduplicate events based on the event ID.
 
-
+In addition, fields that have already been extracted (such as page URL and page title) may still remain inside the event_params array and continue occupying storage space. A REPLACE ... EXCEPT operation is used to remove these processed fields from the original array.
 
 ### final_add_row_numbers
-
-
+Apply sequence numbers for hits and pages partitioned by session.
