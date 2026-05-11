@@ -10,13 +10,16 @@ config {
 }
 
 js{
-    const {helpers} = require("includes/core/modules/ga4/helpers");
+    const {helpers} = require("includes/core/modules/ga4/helpers.js");
     const config = helpers.getModuleConfig("ga4");
 
     // check if there is invalid columns or duplicate columns in the custom config
-    helper.checkColumnNames(config);
+    helpers.checkColumnNames(config);
 }
 
 pre_operations {
     DECLARE date_checkpoiint DATE;
+    SET date_checkpoiint = {
+
+    }
 }

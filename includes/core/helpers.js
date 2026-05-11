@@ -66,7 +66,44 @@ const getModuleConfig = (moduleName) => {
 
 // Check the duplcate column names and invalid column names in the config.
 const checkColumnNames = (config) => {
+    const sanityCheck = (configArray, description) => {
+        // Check if the array is not defined
+        if(configArray === undefined){
+            return true;
+        }
+        // Check if the array can be iterated
+        if(typeof configArray[Symbol.iterator] != "function"){
+            return true;
+        }
 
+        // Continue to check
+        const cols = new Set();
+        for(const obj of configArray){
+            const col = obj.renameTo || obj.name;
+            // Check if there are duplcate names in the custom array
+            if(cols.has(col)){
+                throw new Error("Duplicate column: `" + col + "` found in " + description ||
+                    "config" + " - please rename"
+                );
+            }
+
+            // Check if there are invalid names in the custom array
+            if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(col) || col.includes(" ")){
+                throw new Error("Invalid column name: `" + col + "`found in " + description ||
+                    "config" + " - please rename"
+                );
+            }
+        cols.add(col);
+        }
+        return true; // No duplcate found
+    };
+
+    sanityCheck(config.CUSTOM_EVENT_PARAMS_ARRAY, "custom event params");
+    sanityCheck(config.CUSTOM_USER_PROPERTIES_ARRAY, "user properties");
+    sanityCheck(config.CUSTOM_ITEM_PARAMS_ARRAY, "custom item parameters");
+    sanityCheck(config.CUSTOM_URL_PARAMS_ARRAY, "custom url parameters");
+
+    return true;
 };
 
 const helpers = {
