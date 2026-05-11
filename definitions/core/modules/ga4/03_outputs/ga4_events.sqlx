@@ -31,3 +31,7 @@ pre_operations {
     ${when(incremental(),
         `DELETE FROM ${self()} WHERE event_date >= date_checkpoint`)}
 }
+
+WITH source_ga4_export AS (
+
+),
