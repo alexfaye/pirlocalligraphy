@@ -4,7 +4,7 @@ This helpers.js file is used to
 */
 
 // This getConfigByType checks if the config.js exists in the dedicated directory
-// and it returns the module's config.js itself
+// and it returns the module's config itself
 const getConfigByType = (moduleName, configType="custom") => {
     let jsConfig;
     try{
