@@ -106,10 +106,25 @@ const checkColumnNames = (config) => {
     return true;
 };
 
+// Generate SQL for a list creation based on provided list
+// A list like ['a', 'b', 'c'] will returned (a, b, c) for SQL clause
+const  generateListSQL = (list) => {
+    return `('${list.join("', ")}')`;
+};
+
+// Generate SQL for a WHERE clause based on provided list
+const generateFilterTypeFromListSQL = (type="exclude", column, list) => {
+    if(list.length == 0) return `true`;
+    const filterType = type === "exclude" ? "not in" : "in";
+    // if column is null, null not in (...) will cause null return
+    return `COALESCE(${column}, "") ${filterType} ${generateListSQL(list)}`;
+};
+
 const helpers = {
     getModuleConfig,
     getConfigByType,
     checkColumnNames,
+    generateFilterTypeFromListSQL,
 };
 
 module.exports = {helpers};

@@ -33,5 +33,221 @@ pre_operations {
 }
 
 WITH source_ga4_export AS (
+    SELECT
+        *,
+        _table_suffix as table_suffix,
+    FROM ${ref("events_*")}
+    WHERE
+        PARSE_DATE('%Y%m%d', REGEXP_EXTRACT(_table_suffix, '[0-9]+')) >= date_checkpoint
+    AND 
+    -- Exclude the events_intraday_* tables
+        CONTAINS_SUBSTR(_table_suffix, 'intraday') IS FALSE
+    AND
+    -- Exclude the events_fresh_* tables
+        CONTAINS_SUBSTR(_table_suffix, 'fresh') IS FALSE
+    AND
+    -- Exclude the unwanted events defined in config.js
+        ${helpers.generateFilterTypeFromListSQL("exclude", "events_name", config.EVENTS_TO_EXCLUDE)}
+    AND
+    -- Exclude the unwanted hostsnames, like localhost
+        ${helpers.generateFilterTypeFromListSQL("exclude", "device.web_info.hostname", config.HOSTNAME_EXCLUDE)}
+    AND
+    -- Include the wanted hostsnames
+        ${helpers.generateFilterTypeFromListSQL("include", "device.web_info.hostname", config.HOSTNAME_INCLUDE_ONLY)}
+),
 
+stage_unnest_params as (
+    SELECT
+        event_name,
+        table_suffix,
+        PARSE_DATE('%Y%m%d', event_date) as event_date, -- partition column
+        -- used for incrementality
+        DATE_DIFF(CURRENT_DATE(), CAST(event_date AS DATE FORMAT 'YYYMMDD'), DAY) > $(config.DATE_IS_FUNAL_DAYS) as is_final,
+
+        STRUCT(
+            event_timestamp,
+            -- Transfer to timestamp type
+            TIMESTAMP_MICROS(event_timestamp) AS event_timestamp_utc,
+            user_first_touch_timestamp as user_first_touch_timestamp,
+            TIMESTAPM_MICROS(user_first_touch_timestamp) as user_first_touch_timestamp_utc
+        ) AS time,
+
+        -- User info
+        user_pseudo_id,
+        user_id,
+        is_active_user,
+
+        -- Event info
+        batch_event_index,
+        batch_ordering_id,
+        batch_page_id,
+
+        -- All the following fields needs to be listed here in order not be broen when Google adds new
+        -- fields in the future
+        STRUCT(
+            privacy_info.analytics_storage AS analytics_storage,
+            privacy_info.ads_storage AS ads_storage,
+            privacy_info.uses_transient_token AS uses_transient_token
+        ) AS privacy_info,
+
+        STRUCT(
+            collected_traffic_source.manual_campaign_id,
+            collected_traffic_source.manual_campaign_name,
+            collected_traffic_source.manual_source,
+            collected_traffic_source.manual_medium,
+            collected_traffic_source.manual_term,
+            collected_traffic_source.manual_content,
+            collected_traffic_source.manual_source_platform,
+            collected_traffic_source.manual_creative_format,
+            collected_traffic_source.manual_marketing_tactic,
+            collected_traffic_source.gclid,
+            collected_traffic_source.dclid,
+            collected_traffic_source.stsltid
+        ) AS coolected_traffic_source,
+
+        STRUCT(
+            STRUCT(
+                session_traffic_source_last_click.manual_campaign.campaign_id,
+                session_traffic_source_last_click.manual_campaign.campaign_name,
+                session_traffic_source_last_click.manual_campaign.source,
+                session_traffic_source_last_click.manual_campaign.medium,
+                session_traffic_source_last_click.manual_campaign.term,
+                session_traffic_source_last_click.manual_campaign.content,
+                session_traffic_source_last_click.manual_campaign.source_platform,
+                session_traffic_source_last_click.manual_campaign.creative_format,
+                session_traffic_source_last_click.manual_campaign.marketing_tactic
+            ) AS manual_campaign,
+
+            STRUCT(
+                session_traffic_source_last_click.google_ads_campaign.customer_id,
+                session_traffic_source_last_click.google_ads_campaign.account_name,
+                session_traffic_source_last_click.google_ads_campaign.campaign_id,
+                session_traffic_source_last_click.google_ads_campaign.campaign_name,
+                session_traffic_source_last_click.google_ads_campaign.ad_group_id,
+                session_traffic_source_last_click.google_ads_campaign.ad_group_name
+            ) AS google_ads_campaign,
+
+            STRUCT(
+                session_traffic_source_last_click.cross_channel_campaign.campaign_id,
+                session_traffic_source_last_click.cross_channel_campaign.campaign_name,
+                session_traffic_source_last_click.cross_channel_campaign.source,
+                session_traffic_source_last_click.cross_channel_campaign.medium,
+                session_traffic_source_last_click.cross_channel_campaign.source_platform,
+                session_traffic_source_last_click.cross_channel_campaign.default_channel_group,
+                session_traffic_source_last_click.cross_channel_campaign.primary_channel_group
+            ) AS cross_channel_campaign,
+
+            STRUCT(
+                session_traffic_source_last_click.sa360_campaign.campaign_id,
+                session_traffic_source_last_click.sa360_campaign.campaign_name,
+                session_traffic_source_last_click.sa360_campaign.source,
+                session_traffic_source_last_click.sa360_campaign.medium,
+                session_traffic_source_last_click.sa360_campaign.ad_group_id,
+                session_traffic_source_last_click.sa360_campaign.ad_group_name,
+                session_traffic_source_last_click.sa360_campaign.creative_format,
+                session_traffic_source_last_click.sa360_campaign.engine_account_name,
+                session_traffic_source_last_click.sa360_campaign.enging_account_type,
+                session_traffic_source_last_click.sa360_campaign.manager_account_name
+            ) AS sa360_campaign,
+
+            STRUCT(
+                session_traffic_source_last_click.cm360_campaign.campaign_id,
+                session_traffic_source_last_click.cm360_campaign.campaign_name,
+                session_traffic_source_last_click.cm360_campaign.source,
+                session_traffic_source_last_click.cm360_campaign.medium,
+                session_traffic_source_last_click.cm360_campaign.account_id,
+                session_traffic_source_last_click.cm360_campaign.account_name,
+                session_traffic_source_last_click.cm360_campaign.advertiser_id,
+                session_traffic_source_last_click.cm360_campaign.advertiser_name,
+                session_traffic_source_last_click.cm360_campaign.creative_id,
+                session_traffic_source_last_click.cm360_campaign.creative_format,
+                session_traffic_source_last_click.cm360_campaign.creative_name,
+                session_traffic_source_last_click.cm360_campaign.creative_type,
+                session_traffic_source_last_click.cm360_campaign.creative_type_id,
+                session_traffic_source_last_click.cm360_campaign.creative_version,
+                session_traffic_source_last_click.cm360_campaign.placement_id,
+                session_traffic_source_last_click.cm360_campaign.placement_cost_structure,
+                session_traffic_source_last_click.cm360_campaign.placement_name,
+                session_traffic_source_last_click.cm360_campaign.rendering_id,
+                session_traffic_source_last_click.cm360_campaign.site_id,
+                session_traffic_source_last_click.cm360_campaign.site_name
+            ) AS cm360_campaign,
+
+            STRUCT(
+                session_traffic_source_last_click.dv360_campaign.campaign_id,
+                session_traffic_source_last_click.dv360_campaign.campaign_name,
+                session_traffic_source_last_click.dv360_campaign.source,
+                session_traffic_source_last_click.dv360_campaign.medium,
+                session_traffic_source_last_click.dv360_campaign.advertiser_id,
+                session_traffic_source_last_click.dv360_campaign.advertiser_name,
+                session_traffic_source_last_click.dv360_campaign.creative_id,
+                session_traffic_source_last_click.dv360_campaign.creative_format,
+                session_traffic_source_last_click.dv360_campaign.creative_name,
+                session_traffic_source_last_click.dv360_campaign.exchange_id,
+                session_traffic_source_last_click.dv360_campaign.exchange_name,
+                session_traffic_source_last_click.dv360_campaign.insertion_order_id,
+                session_traffic_source_last_click.dv360_campaign.insertion_order_name,
+                session_traffic_source_last_click.dv360_campaign.line_item_id,
+                session_traffic_source_last_click.dv360_campaign.line_item_name,
+                session_traffic_source_last_click.dv360_campaign.partner_id,
+                session_traffic_source_last_click.dv360_campaign.partner_name
+            ) AS dv360_campaign
+        ) AS session_traffic_source_last_click,
+
+        STRUCT(
+            publisher.ad_revenue_in_usd,
+            publisher.ad_format,
+            publisher.ad_source_name,
+            publisher.ad_unit_id
+        ) AS publisher,
+
+        ecommerce, -- This will be repacked and cleaned later in step 2
+
+        STRUCT(
+            user_ltv.revenue,
+            user_ltv.currency
+        ) AS user_ltv,
+
+        STRUCT(
+            device.category,
+            device.mobile_brand_name,
+            device.mobile_model_name,
+            device.mobile_marketing_name,
+            device.mobile_os_hardware_model,
+            device.operating_system,
+            device.operating_system_version,
+            device.vendor_id,
+            device.advertising_id,
+            device.language,
+            device.is_limited_ad_tracking,
+            device.time_zone_offset_seconds,
+            device.browser,
+            device.browser_version,
+            STRUCT(
+                device.web_info.browser,
+                device.web_info.browser_version,
+                device.web_info.hostname
+            ) AS web_info
+        ) AS device,
+
+        STRUCT(
+            app_info.id,
+            app_info.version,
+            app_info.install_store,
+            app_info.firebase_app_id,
+            app_info.install_source
+        ) AS app_info,
+
+        STRUCT(
+            geo.city,
+            geo.country,
+            geo.continent,
+            geo.region,
+            geo.sub_continent,
+            geo.metro
+        ) AS geo,
+
+        STRUCT(
+            
+        )
 ),
