@@ -1,7 +1,43 @@
 /*
-This helpers.js file is used to 
+This helpers.js file is core helpers of common functions
 
 */
+
+
+// The following generateParamSQL, generateParamsSQL and generateStructSQL are sometimes
+// working together to generate a 'SELECT FROM UNNEST()' statement based on the config.js
+// like event.params, item_params
+const generateParamSQL = (config, column = "event_params") => {
+    let value ="";
+    // Decimal type of values are all related to currency value and should be converted to Numeric type in BigQuery
+    if(config.type === "decimal"){
+        value = `(SELECT COALESCE(SAFE_CAST(value.int_value AS Numeric), SAFE_CAST(value.double_value AS Numeric),
+        SAFE_CAST(value.float_value AS Numeric) FROM UNNEST(${column}) WHERE key='${config.name}') `;
+    }
+    else if(config.type === "string"){
+        // Sometimes GA4 will make mistake, putting string value into a number field
+        value = `(SELECT COALESCE(value.string_value, CAST(value.int_value AS string),
+        CAST(value.float_value AS string), CAST(value.double_value AS string))
+        FROM UNNEST(${column}) WHERE key='${config.name}') `;
+    }
+    else {
+        value = `(SELECT value.${config.type}_value FROM UNNEST(${column})) WHERE key='${config.name}') `;
+    }
+    value = config.cleaningMethod ? config.cleaningMethod(value) : value;
+    return `${value} AS ${config.reNameTo ? config.reNameTo : config.name}`;
+};
+
+// This function uses the array in config.js and needed column to generate the sql for a Struct
+const generateParamsSQL = (configArray, column = "event_params") => {
+    return `${configArray.map((config) => {
+        return generateParamSQL(config, column);
+    }).join(",\n")}`;
+};
+
+// This returns a standand Struct for a SQL statement
+const generateStructSQL = (sql) => {
+    return `STRUCT (${sql})`;
+};
 
 // This getConfigByType checks if the config.js exists in the dedicated directory
 // and it returns the module's config itself
@@ -124,6 +160,8 @@ const helpers = {
     getModuleConfig,
     getConfigByType,
     checkColumnNames,
+    generateParamsSQL,
+    generateStructSQL,
     generateFilterTypeFromListSQL,
 };
 
