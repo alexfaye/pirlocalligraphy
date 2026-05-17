@@ -39,6 +39,20 @@ const generateStructSQL = (sql) => {
     return `STRUCT (${sql})`;
 };
 
+
+// The following two functions extract url param from url to form a Struct
+const generateURLParamSQL = (urlParam, column, urlDecode = true) => {
+    let value = `regexp_extract(${column}, r"^[^#]+[?&]${urlParam.name}=([^&#]+)")`;
+    value = urlParam.cleaningMethod ? urlParam.cleaningMethod(value) : value;
+    return `${value} AS ${urlParam.reNameTo ? urlParam.reNameTo : urlParam.name}`;
+};
+
+const generateURLParamsSQL = (urlParamsArray, column, urlDecode = true) => {
+    return `${urlParamsArray.map((urlParam) => {
+        generateURLParamSQL(urlParam, column, urlDecode)}).join(",\n")
+    }`;
+};
+
 // This getConfigByType checks if the config.js exists in the dedicated directory
 // and it returns the module's config itself
 const getConfigByType = (moduleName, configType="custom") => {
@@ -156,13 +170,17 @@ const generateFilterTypeFromListSQL = (type="exclude", column, list) => {
     return `COALESCE(${column}, "") ${filterType} ${generateListSQL(list)}`;
 };
 
+const lowerSQL = (columnName) => `lower(${columnName})`;
+
 const helpers = {
     getModuleConfig,
     getConfigByType,
     checkColumnNames,
     generateParamsSQL,
     generateStructSQL,
+    generateURLParamsSQL,
     generateFilterTypeFromListSQL,
+    lowerSQL,
 };
 
 module.exports = {helpers};
