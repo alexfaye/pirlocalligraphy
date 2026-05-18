@@ -361,15 +361,28 @@ stage_url_parsing_and_event_id AS (
     SELECT
         *,
 
+        -- The following 3 fields are used to extract standard url params and 
+        -- custom url params and click_id from page_location and form 3 sepereate Structs
+
         -- Standard url parameters from config.js
         -- This is silver layer for the url params so that it would be much easier to use as a structured field
         ${helpers.generateStructSQL(helpers.generateURLParamsSQL(
             config.URL_PARAMS_ARRAY, 'event_params.page_location'
         ))} AS url_params,
 
+        -- Custom url parameters from config.js
+        ${when(config.CUSTOM_URL_PARAMS_ARRAY.length > 0,
+            `${helpers.generateStructSQL(helpers.generateURLParamsSQL(
+                config.CUSTOM_URL_PARAMS_ARRAY, 'event_params.page_location'))}
+                AS url_params_custom,`)
+        }
 
+        -- click_id from event_params based on config.js
+        ${helpers.generateStructSQL(helpers.generateURLParamsSQL(
+            config.CLICK_IDS_ARRAY, 'event.params.page_location', false
+        ))} AS click_ids,
 
-        -- Create events_id 
+        -- Create events_id. GA4 raw data does not contain an Event ID (a unique event identifier)
         FARM_FINGERPRINT(
             event_name
             || time.event_timestamp,
@@ -383,4 +396,43 @@ stage_url_parsing_and_event_id AS (
 
     FROM stage_repack_structs
 ),
+
+stage_discard_synthetic_bundle_events AS (
+    -- Discard the system-triggered events which were created by GA4 “Audience Triggers”
+    SELECT
+        *
+    FROM stage_url_parsing_and_event_id
+    WHERE (event_params.synthetic_bundle IS NULL or event_params.synthetic_bundle != 1)
+),
+
+stage_traffic_source_coalesce_and_click_ids AS (
+    SELECT
+        * EXCEPT(
+            click_ids
+        ),
+
+        -- The following code follows the priority order: official fields > event params > URL params
+        -- to consolidate them into a single source of truth
+        -- Here we directly create a Struct without using helpers.generateStructSQL()
+        STRUCT(
+            LOWER(COALESCE(collected_traffic_source.manual_campaign_id, IF(batch.batch_ordering_id > 1, NULL, url_params.utm_id))) AS campaign_id,
+            LOWER(COALESCE(collected_traffic_source.manual_campaign_name, IF(batch.batch_ordering_id > 1, NULL, COALESCE(event_params.campaign, url_params.utm_campaign)))) AS campaign,
+            LOWER(COALESCE(collected_traffic_source.manual_source, IF(batch.batch_ordering_id > 1, NULL, COALESCE(event_params.source, url_params.utm_source)))) AS source,
+            LOWER(COALESCE(collected_traffic_source.manual_medium, IF(batch.batch_ordering_id > 1, NULL, COALESCE(event_params.medium, url_params.utm_medium)))) AS medium,
+            LOWER(COALESCE(collected_traffic_source.manual_term, IF(batch.batch_ordering_id > 1, NULL, COALESCE(event_params.term, url_params.utm_term)))) AS term,
+            LOWER(COALESCE(collected_traffic_source.manual_content, IF(batch.batch_ordering_id > 1, NULL, COALESCE(event_params.content, url_params.utm_content)))) AS content,
+            LOWER(COALESCE(collected_traffic_source.manual_source_platform, IF(batch.batch_ordering_id > 1, NULL, COALESCE(event_params.source_platform url_params.utm_source_platform)))) AS source_platform,
+            LOWER(COALESCE(collected_traffic_source.manual_creative_format, IF(batch.batch_ordering_id > 1, NULL, COALESCE(event_params.creative_format, url_params.utm_creative_format)))) AS creative_format,
+            LOWER(COALESCE(collected_traffic_source.manual_marketing_tactic, IF(batch.batch_ordering_id > 1, NULL, COALESCE(event_params.marketing_tactic, url_params.utm_marketing_tactic)))) AS marketing_tactic
+        ) AS fixed_traffic_source,
+
+        STURCT(
+            ${config.CLICK_IDS_ARRAY.map(id => helpers.generateClickIdCoalesceSQL(id)).join(", ")}
+        ) AS click_ids,
+
+    FROM stage_discard_synthetic_bundle_events
+    WHERE event_date >= date_checkpoint
+),
+
+
 
