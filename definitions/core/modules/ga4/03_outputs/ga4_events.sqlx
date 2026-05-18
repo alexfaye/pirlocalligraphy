@@ -434,5 +434,48 @@ stage_traffic_source_coalesce_and_click_ids AS (
     WHERE event_date >= date_checkpoint
 ),
 
+-- Fix several attribution error:
+-- ad traffic containing gclid is often broken and misclassified by GA4 as organic or referral traffic;
+-- traffic coming from the Google app or social media apps may appear as android-app://com... package names;
+-- payment redirects such as PayPal, if not excluded, can interrupt the original traffic session.
+stage_create_fixed_traffic_source AS (
+    SELECT
+        * EXCEPT(
+            fixed_traffic_source
+        ),
 
+        -- Campaign, campaign source & campaign medium should be rewrite if necessary
+
+        STRUCT(
+            fixed_traffic_source.campaign_id,
+
+            -- Firstly campaign
+
+            CASE
+                WHEN(
+                    (COALESCE(fixed_traffic_source.campaign, '') IN ('(organic)', '(referral)', ''))
+                    OR fixed_traffic_source.campaign IS NULL
+                )
+                THEN
+                    CASE ${helpers.generateClickCasesSQL(config.CLICK_IDS_ARRAY, "campaign")}
+                    -- when the traffic are organic
+                    ELSE fixed_traffic_source.campaign
+                    END
+                -- when the campaign are not from Google Ads 
+                ELSE fixed_traffic_source.campaign
+            END AS campaign,
+
+            -- Then campaign source
+
+
+            -- Lastly campaign medium
+        
+            fixed_traffic_source.term,
+            fixed_traffic_source.content,
+            fixed_traffic_source.source_platform,
+            fixed_traffic_source.creative_format,
+            fixed_traffic_source.marketing_tactic
+        ) AS fixed_traffic_source
+    FROM stage_traffic_source_coalesce_and_click_ids
+),
 

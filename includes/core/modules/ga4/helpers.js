@@ -1,12 +1,6 @@
 const {helpers: coreHelpers} = require("includes/core/helpers.js");
 
-const ga4Helpers={};
 
-const helpers = {...coreHelpers, ...ga4Helpers};
-
-module.exports = {
-    helpers
-};
 
 // Generate SQL to coalesce click_ids from different sources to return the first non-null value
 // If any clickid contains collected_traffic_source, that clickid is Google-related click and can be 
@@ -20,4 +14,20 @@ const generateClickIdCoalesceSQL = (clickId) => {
         click_ids.${clickId.name}) AS ${clickId.name}`;
     }
     return `click_ids.${clickId.name} AS ${clickId.name}`;
+};
+
+const generateClickCasesSQL = (clickIdsArray, parameterName) => {
+    return clickIdsArray.map((id) => 
+        `when click_ids.${id.name} is not null then '${id[parameterName]}'`).join("\n");
+};
+
+const ga4Helpers={
+    generateClickIdCoalesceSQL,
+    generateClickCasesSQL
+};
+
+const helpers = {...coreHelpers, ...ga4Helpers};
+
+module.exports = {
+    helpers
 };
