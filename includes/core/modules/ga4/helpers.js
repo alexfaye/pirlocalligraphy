@@ -16,14 +16,14 @@ const generateClickIdCoalesceSQL = (clickId) => {
     return `click_ids.${clickId.name} AS ${clickId.name}`;
 };
 
-const generateClickCasesSQL = (clickIdsArray, parameterName) => {
+const generateClickIdCasesSQL = (clickIdsArray, parameterName) => {
     return clickIdsArray.map((id) => 
         `when click_ids.${id.name} is not null then '${id[parameterName]}'`).join("\n");
 };
 
 const ga4Helpers={
     generateClickIdCoalesceSQL,
-    generateClickCasesSQL
+    generateClickIdCasesSQL
 };
 
 const helpers = {...coreHelpers, ...ga4Helpers};
