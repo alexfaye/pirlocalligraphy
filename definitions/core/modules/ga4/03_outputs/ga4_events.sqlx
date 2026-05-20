@@ -545,6 +545,70 @@ stage_add_meta_info AS (
         * EXCEPT(time),
         () AS time,
 
+        SELECT AS STRUCT(
+            time.*,
+            DATETIME(time.event_timestamp_utc, '${dataform.projectConfig.vars.LOCAL_TIMEZONE}') AS timestamp_local,
+            DATE(DATETIME(time.event_timestamp_utc, '${dataform.projectConfig.vars.LOCAL_TIMEZONE}')) AS date_local
+        ) AS time,
+
+        -- Identify the Measurement Protocol events which were sent to GA4 by web server, CRM and etc for offline conversion update,
+        -- third-party system integration and etc
+        -- On 2025-06-11, GA4 introduced batch_page_id which will set the event a batch_page_id when visitors browsing the page with
+        -- true browsers. For events before 2025-06-11, 
+        CASE
+            WHEN event_date >= '2025-06-11' AND platform = 'WEB' AND batch.batch_page_id IS NULL THEN true
+            WHEN event_date < '2025-06-11' AND device.language IS NULL AND device.operating_system IS NULL AND device.category = 'desktop' THEN true
+            ELSE false
+        END AS is_measurement_protocol_hit,
+
+        FARM_FINGERPRINT(user_pseudo_id || event_params.ga_session_id) AS session_id,
+
+        -- All page info in a single Struct
+        STRUCT(
+            LOWER(net.host(event_params.page_location)) AS hostname,
+            event_params.page_location AS location,
+            -- Extract the clean path from the page url
+            REGEXP_EXTRACT(event_params.page_location, r'^(?:(?:[^:\/?#]+):)?(?:\/\/(?:[^\/?#]*))?([^?#]*)(?:\?(?:[^#]*))?(?:#(?:.*))?') AS path,
+            event_params.page_referrer AS referrer,
+            event_params.page_title AS title
+        ) AS page,
+
+        -- This field might be critically important when identifying which traffic are from organic or marketing in the reports
+        CASE
+            -- Identity the direct traffic source
+            WHEN (fixed_traffic_source.source IS NULL AND fixed_traffic_source.medium IS NULL) THEN false
+            -- Identity the direct traffic source in GA4
+            WHEN (LOWER(fixed_traffic_source.source) IN ('direct', '(direct)') 
+            AND LOWER(fixed_traffic_source.medium) IN ('none', '(none)', '(not set)')) THEN false
+            -- The rest such as cpc, social, seo, has source
+            ELSE true
+        END AS has_source
 
     FROM stage_create_fixed_traffic_source
 ),
+
+stage_dedupe_by_event_id AS (
+    SELECT
+    -- Remove the following fields in the Struct in order to reduce the enquery cost in BigQuery
+    -- since these fields already exist in the page Struct in CTE stage_add_meta_info
+        * REPLACE((SELECT AS STRUCT event_params.* EXCEPT(
+            batch_ordering_id,
+            batch_page_id,
+            page_location,
+            page_referrer,
+            page_title
+            )) AS event_params
+        )
+    FROM stage_add_meta_info
+    -- Elegantly remove the duplicated events which might caused by GA4 sening data for multiple times
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY event_id) = 1
+),
+
+final_add_row_numbers AS (
+
+),
+
+SELECT
+    CURRENT_TIMESTAMP() AS _run_timestamp, -- Indicate when the row was last run
+    *
+FROM final_add_row_numbers
