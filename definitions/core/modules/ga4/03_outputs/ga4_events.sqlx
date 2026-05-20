@@ -605,9 +605,24 @@ stage_dedupe_by_event_id AS (
 ),
 
 final_add_row_numbers AS (
+    SELECT
+        *,
 
-),
+        -- Calculate hit numbers per session
+        STRUCT(
 
+         AS hit_number,
+
+        -- Calculate page number
+        IF(
+
+        )
+         ) AS session_info
+
+        FROM stage_dedupe_by_event_id
+)
+
+-- Finanlly it arrives the ending
 SELECT
     CURRENT_TIMESTAMP() AS _run_timestamp, -- Indicate when the row was last run
     *
