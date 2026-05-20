@@ -484,7 +484,7 @@ stage_create_fixed_traffic_source AS (
 
                 -- When the traffic source has referral but was broken by GA4 or
                 -- when the traffic source is payment gateway and ignore_referrer = true, in this case should be ignored
-                -- Here event_params.ignore_referrer != true can be taken into effect only certain website like Paypal
+                -- Here event_params.ignore_referrer != true can only be taken into effect when certain website like Paypal
                 -- has been added into the list in GA4
                 WHEN fixed_traffic_source.source IS NULL AND event_params.ignore_referrer != 'true' AND
                 event_params.page_referrer IS NOT NULL
@@ -504,6 +504,32 @@ stage_create_fixed_traffic_source AS (
             END AS source,
 
             -- Lastly campaign medium
+            CASE
+                WHEN (fixed_traffic_source.medium IS NOT NULL AND COALESCE(fixed_traffic_source.campaign, '') IN ('(organic)', '(referral)', ''))
+                OR (fixed_traffic_source.medium IS NULL AND fixed_traffic_source.campaign IS NULL)
+                THEN
+                    CASE
+                        ${helpers.generateClickIdCaseSQL(config.CLICK_IDS_ARRAY, 'medium')}
+                    ELSE fixed_traffic_source.medium
+                END
+
+                WHEN fixed_traffic_source.medium IS NULL AND event_params.page_referrer LIKE '%android-app://com.google%'
+                    THEN 'organic'
+                
+                -- Here can be improved in the next update since something like 'com.instagram.android' in the medium
+                -- should be translated into instagram in the source
+                WHEN fixed_traffic_source.medium IS NULL AND REGEXP_CONTAINS(event_params.page_referrer, r'^android-app.*(${config.SOCIAL_PLATFORMS_REGEX}).*')
+                    THEN 'social'
+
+                WHEN fixed_traffic_source.medium IS NULL AND event_params.page_referrer like '%android-app%'
+                    THEN 'android-app'
+
+                WHEN fixed_traffic_source.medium IS NULL AND event_params.ignore_referrer != 'true' AND
+                event_params.page_referrer IS NOT NULL
+                    THEN 'referral'
+            ELSE fixed_traffic_source.medium
+
+            END AS medium,
         
             fixed_traffic_source.term,
             fixed_traffic_source.content,
@@ -514,3 +540,11 @@ stage_create_fixed_traffic_source AS (
     FROM stage_traffic_source_coalesce_and_click_ids
 ),
 
+stage_add_meta_info AS (
+    SELECT  
+        * EXCEPT(time),
+        () AS time,
+
+
+    FROM stage_create_fixed_traffic_source
+),
