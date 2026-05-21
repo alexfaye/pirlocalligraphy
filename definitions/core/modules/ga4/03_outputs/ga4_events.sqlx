@@ -78,9 +78,9 @@ stage_unnest_params as (
         is_active_user,
 
         -- Event info
-        batch_event_index,
-        batch_ordering_id,
-        batch_page_id,
+        batch_event_index, -- The event order number in one batch
+        batch_ordering_id, -- The batch order number
+        batch_page_id, --The page instance id which is accessed by a visitor
 
         -- All the following fields needs to be listed here in order not be broen when Google adds new
         -- fields in the future
@@ -591,6 +591,8 @@ stage_dedupe_by_event_id AS (
     SELECT
     -- Remove the following fields in the Struct in order to reduce the enquery cost in BigQuery
     -- since these fields already exist in the page Struct in CTE stage_add_meta_info
+    -- batch_page_id, batch_ordering_id were available before July 2024 and now put into batch Struct in 
+    -- CTE stage_repack_structs
         * REPLACE((SELECT AS STRUCT event_params.* EXCEPT(
             batch_ordering_id,
             batch_page_id,
@@ -607,19 +609,21 @@ stage_dedupe_by_event_id AS (
 final_add_row_numbers AS (
     SELECT
         *,
-
-        -- Calculate hit numbers per session
+        -- Calculate hit numbers to build the clickstream for each visitor in one session
         STRUCT(
-
-         AS hit_number,
+            IF(user_pseudo_id IS NOT NULL AND event_params.ga_session_id IS NOT NULL
+            , ROW_NUMBER() OVER(PARTITION BY user_pseudo_id, event_params.ga_session_id ORDER BY time.event_timestamp ASC)
+            , NULL)
+            AS hit_number,
 
         -- Calculate page number
-        IF(
+            IF(user_pseudo_id IS NOT NULL AND event_params.ga_session_id IS NOT NULL AND batch.batch_page_id IS NOT NULL
+            , DENSE_RANK() OVER(PARTITION BY user_pseudo_id, event_params.ga_session_id ORDER BY batch.batch_page_id ASC)
+            , NULL)
+            AS page_number
+        ) AS session_info
 
-        )
-         ) AS session_info
-
-        FROM stage_dedupe_by_event_id
+    FROM stage_dedupe_by_event_id
 )
 
 -- Finanlly it arrives the ending
