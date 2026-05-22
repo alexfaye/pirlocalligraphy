@@ -616,7 +616,7 @@ final_add_row_numbers AS (
             , NULL)
             AS hit_number,
 
-        -- Calculate page number
+        -- Calculate page number in one session
             IF(user_pseudo_id IS NOT NULL AND event_params.ga_session_id IS NOT NULL AND batch.batch_page_id IS NOT NULL
             , DENSE_RANK() OVER(PARTITION BY user_pseudo_id, event_params.ga_session_id ORDER BY batch.batch_page_id ASC)
             , NULL)
