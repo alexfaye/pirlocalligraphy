@@ -2,6 +2,7 @@ config {
     type: "incremental",
     description: "This output event table are ready for Data Studio which is unnested, cleaned, clustered data with several fixes",
     schema: dataform.projectConfig.vars.OUTPUTS_DATASET,
+    tags: ["event","outputs"],
     bigquery: {
         partitionBy: "event_date",
         clusterBy: ["event_date", "session_id"]
