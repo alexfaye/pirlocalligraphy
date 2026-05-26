@@ -1,0 +1,19 @@
+config {
+    type: "incremental",
+    description: "Intermediate incremental sessions table with modeling helpers implmemented. 1 row per session_id. Only valid session",
+    schema: dataform.projectConfig.vars.TRANSFORMATION_DATASET,
+    tags: ["session","intermediate"],
+    dependencies: ["source_categories"],
+    bigquery: {
+        partitionBy: "session_date",
+        clusterBy: ["session_id"]
+    }
+}
+
+js{
+
+}
+
+pre_operations {
+    
+}

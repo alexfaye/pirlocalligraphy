@@ -6,4 +6,5 @@ dataformCoreVersion: 3.0.52
 vars:
   GA4_DATASET: analytics_454895025
   LOCAL_TIMEZONE: Ausstralia/Adelaide
-  OUTPUTS_DATASE: pirlo_calligraphy
+  OUTPUTS_DATASET: pirlo_calligraphy
+  TRANSFORMATION_DATASET: pirlo_calligraphy_i
