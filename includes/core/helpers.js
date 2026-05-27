@@ -172,6 +172,14 @@ const generateFilterTypeFromListSQL = (type="exclude", column, list) => {
 
 const lowerSQL = (columnName) => `lower(${columnName})`;
 
+const generateArrayAggSQL = (
+    paramName, column = false, orderTypeAsc = true, orderBy = "time.event_timestamp_utc"
+) => {
+    const alias = column === null ? "" : `AS ${column ? column : paramName}`;
+    return `ARRAY_AGG(${paramName} IGNORE NULLS ORDER BY ${orderBy} ${orderTypeAsc ? "ASC" : "DESC"}
+    LIMIT 1) [SAFE_OFFSET(0)] ${alias}`; // Get the first one after sorting by LIMIT 1 which is used in the attribution model
+    };
+
 const helpers = {
     getModuleConfig,
     getConfigByType,
@@ -181,6 +189,7 @@ const helpers = {
     generateURLParamsSQL,
     generateFilterTypeFromListSQL,
     lowerSQL,
+    generateArrayAggSQL,
 };
 
 module.exports = {helpers};

@@ -11,9 +11,73 @@ config {
 }
 
 js{
-
+    const { helpers} = require("includes/core/modules/ga4/helpers");
+    const config = helpers.getModuleConfig('ga4');
 }
 
 pre_operations {
-    
+    DECLARE date_checkpoint DATE;
+    SET date_checkpoint = (
+        ${when(incremental(),
+            `SELECT COALESCE(MAX(session_date)+1, DATE('${config.GA4_START_DATE}'))
+            FROM ${self()}
+            WHERE is_final = true`,
+            `SELECT DATE('${config.GA4_START_DATE}')`)}
+    );
+
+    ${when(incremental(), `DELETE FROM ${self() WHERE session_date >= date_checkpoint}`)}
 }
+
+-- One row for one session
+WITH source_events AS (
+    SELECT 
+        session_id,
+        stream_id,
+        user_pseudo_id,
+        property_id,
+        MIN(table_suffix) AS table_suffix, -- Find the earliest date of the session
+        COUNT(DISTINCT table_suffix) > 1 as is_multiday_session, -- Check if the session covers more than one day
+        MAX(is_final) AS is_final,  -- Return true if session started on an is_final day
+
+        -- All the following info will returned with the first record order by time_stamp acs
+        ${helpers.generateArrayAggSQL('device')}, -- device is a Struct in ga4_events
+        ${helpers.generateArrayAggSQL('geo')}, -- geo is a Struct in ga4_events
+        ${helpers.generateArrayAggSQL('app_info')}, -- app_info is a Struct in ga4_events
+        ${helpers.generateArrayAggSQL('platform')},
+
+        -- page is a Struct defined in ga4_events
+        STRUCT(
+            ${helpers.generateArrayAggSQL('page.location', 'landing_page_location')},
+            ${helpers.generateArrayAggSQL('page.path', 'landing_page_path')},
+            ${helpers.generateArrayAggSQL('page.hostname', 'landing_page_hostname')},
+            ${helpers.generateArrayAggSQL('page.referrer', 'landing_page_referrer')},
+            ${helpers.generateArrayAggSQL('event_params.content_group', 'landing_content_group')} --content_group
+        ) AS landing_page,
+
+        ${helpers.generateArrayAggSQL('session_traffic_source_last_click')},
+
+        ${helpers.generateTrafficSourceSQL('fixed_traffic_source', 'first_traffic_source')},
+        ${helpers.generateTrafficSourceSQL('fixed_traffic_source', 'last_traffic_source', false)},
+
+
+
+
+
+
+
+
+    FROM ${ref("ga4_events")}
+
+    WHERE
+        event_date >= date_checkpoint - 1
+    AND
+        user_pseudo_id IS NOT NULL
+    AND
+        session_id IS NOT NULL
+
+    GROUP BY
+        session_id,
+        stream_id,
+        user_pseudo_id,
+        property_id
+)
