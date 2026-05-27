@@ -353,7 +353,7 @@ stage_repack_structs AS (
             IF(IS_NAN(ecommerce.tax_value_in_usd), 0, ecommerce.tax_value_in_usd) AS tax_value_in_usd,
             ecommerce.unique_items,
             IF(ecommerce.transaction_id = '(not set)', NULL, ecommerce.transaction_id) AS transaction_id
-        ) AS ecommerce,
+        ) AS ecommerce
 
         FROM stage_unnest_params
 ),
@@ -469,7 +469,7 @@ stage_create_fixed_traffic_source AS (
                     ELSE fixed_traffic_source.campaign
                 END
                 -- when the traffic params are perfectly retained
-            ELSE fixed_traffic_source.campaign
+                ELSE fixed_traffic_source.campaign
             END AS campaign,
 
             -- Then campaign source
@@ -528,8 +528,7 @@ stage_create_fixed_traffic_source AS (
                 WHEN fixed_traffic_source.medium IS NULL AND event_params.ignore_referrer != 'true' AND
                 event_params.page_referrer IS NOT NULL
                     THEN 'referral'
-            ELSE fixed_traffic_source.medium
-
+                ELSE fixed_traffic_source.medium
             END AS medium,
         
             fixed_traffic_source.term,

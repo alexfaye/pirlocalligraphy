@@ -16,14 +16,39 @@ const generateClickIdCoalesceSQL = (clickId) => {
     return `click_ids.${clickId.name} AS ${clickId.name}`;
 };
 
+// Generate SQL to create a CASE statement for click_ids based on configuration CLICK_IDS_ARRAY
+// It returns one of source/medium/campaign if click_ids is not null
 const generateClickIdCasesSQL = (clickIdsArray, parameterName) => {
     return clickIdsArray.map((id) => 
         `when click_ids.${id.name} is not null then '${id[parameterName]}'`).join("\n");
 };
 
+// Generate SQL to return the first or last value of an array aggregation
+const generateTrafficSourceSQL = (fixedTrafficSourceTable, column = null, orderTypeAsc = true, orderBy = "time.event_stamp_utc") => {
+    const alias = column === null ? "" : `AS ${column || "traffic_source"}`;
+    const orderDirection = orderTypeAsc ? "asc" : "desc";
+
+    return `
+        ARRAY_AGG(
+            IF(
+                COALESCE(
+                    ${fixedTrafficSourceTable}.campaign_id,
+                    ${fixedTrafficSourceTable}.campaign,
+                    ${fixedTrafficSourceTable}.source,
+                    ${fixedTrafficSourceTable}.medium,
+                    ${fixedTrafficSourceTable}.term,
+                    ${fixedTrafficSourceTable}.content
+                ) IS NULL, NULL, ${fixedTrafficSourceTable}
+            )
+            INGORE NULLS ORDER BY ${orderBy} ${orderDirection}
+            LIMIT 1 )[SAFE_OFFSET](0) ${alias}`;
+};
+
+
 const ga4Helpers={
     generateClickIdCoalesceSQL,
-    generateClickIdCasesSQL
+    generateClickIdCasesSQL,
+    generateTrafficSourceSQL,
 };
 
 const helpers = {...coreHelpers, ...ga4Helpers};
