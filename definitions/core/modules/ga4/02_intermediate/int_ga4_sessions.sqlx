@@ -51,20 +51,52 @@ WITH source_events AS (
             ${helpers.generateArrayAggSQL('page.path', 'landing_page_path')},
             ${helpers.generateArrayAggSQL('page.hostname', 'landing_page_hostname')},
             ${helpers.generateArrayAggSQL('page.referrer', 'landing_page_referrer')},
-            ${helpers.generateArrayAggSQL('event_params.content_group', 'landing_content_group')} --content_group
+            ${helpers.generateArrayAggSQL('event_params.content_group', 'landing_content_group')} -- content_group
         ) AS landing_page,
 
         ${helpers.generateArrayAggSQL('session_traffic_source_last_click')},
 
+        -- Sometimes there is an issue when the Struct is not null, but all its sub-Structs (source, medium,
+        -- campaign) are all null, which will make the Dataform believe this Struct is not null but make the attribution 
+        -- model fails because all the first/last touch points are null, so we need to make sure that the sub-Struct are not all null)
+        
+        -- fixed_traffic_source is temparely changed to an Array in order to use ARRAY_AGG() to extract
+        -- the first or last value for attribution model
         ${helpers.generateTrafficSourceSQL('fixed_traffic_source', 'first_traffic_source')},
         ${helpers.generateTrafficSourceSQL('fixed_traffic_source', 'last_traffic_source', false)},
+        ${helpers.generateClickIdTrafficSourceSQL('click_ids', config.CLICK_IDS_ARRAY, 'first_click_ids')},
+        ${helpers.generateClickIdTrafficSourceSQL('click_ids', config.CLICK_IDS_ARRAY, 'last_click_ids', false)},
 
+        -- It is always to retrieve the last user_id because if the user needs to purchase anything, he needs to log in
+        -- so the user_id can be identified at that time
+        ${helpers.generateArrayAggSQL('user_id', false, false)},
 
+        STRUCT(
+            ${helpers.generateArrayAggSQL('page.location', 'exit_page_location', false)},
+            ${helpers.generateArrayAggSQL('page.path', 'exit_page_path', false)},
+            ${helpers.generateArrayAggSQL('page.hostname', 'exit_page_hostname', false)},
+            ${helpers.generateArrayAggSQL('event_params.content_group', 'exit_content_group', false)}
+        ) AS exit_page,
 
+        -- ga_session_number stands for the times when the same user visits
+        -- Theoriotically all the ga_session_number should be the same in the same session_id, but in BigQuery when there is a
+        -- group by clause, all the fields should be in an aggregation funtion
+        -- also when MP hits happen, MIN() can help fix it as long as there is a valid value in ga_session_number
+        MIN(event_params.ga_session_number) AS ga_session_number,
 
+        MIN(event_date) AS session_date,
+        MIN(time.event_timestamp_utc) AS session_start_timestamp_utc,
+        MAX(time.event_timestamp_utc) AS session_end_timestamp_utc,
+        SUM(event_params.engagement_time_msec) AS engagement_time_msec,
 
-
-
+        STRUCT(
+            -- As long as user has engaged with the page, event_params.session_engaged = "1"
+            LOGICAL_OR(event_params.session_engaged = "1") AS is_engaged_session,
+            LOGICAL_OR(has_source) AS is_with_source,
+            NOT LOGICAL_OR(has_source) AS is_direct_session,
+            LOGICAL_OR(url_params.gtm_debug IS NOT NULL) AS is_debug_session, -- If the session is from test data in GTM preview mode
+            LOGICAL_OR(url_params._gl IS NOT NULL) AS is_cross_domain -- If the session is from cross-domain tracking config in GA4
+        ) AS session_info,
 
     FROM ${ref("ga4_events")}
 

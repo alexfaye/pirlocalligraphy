@@ -23,8 +23,8 @@ const generateClickIdCasesSQL = (clickIdsArray, parameterName) => {
         `when click_ids.${id.name} is not null then '${id[parameterName]}'`).join("\n");
 };
 
-// Generate SQL to return the first or last value of an array aggregation
-const generateTrafficSourceSQL = (fixedTrafficSourceTable, column = null, orderTypeAsc = true, orderBy = "time.event_stamp_utc") => {
+// Generate SQL to return the first or last value of an array aggregation used in traffic_source Struct
+const generateTrafficSourceSQL = (fixedTrafficSourceTable, column = null, orderTypeAsc = true, orderBy = "time.event_timestamp_utc") => {
     const alias = column === null ? "" : `AS ${column || "traffic_source"}`;
     const orderDirection = orderTypeAsc ? "asc" : "desc";
 
@@ -40,8 +40,24 @@ const generateTrafficSourceSQL = (fixedTrafficSourceTable, column = null, orderT
                     ${fixedTrafficSourceTable}.content
                 ) IS NULL, NULL, ${fixedTrafficSourceTable}
             )
-            INGORE NULLS ORDER BY ${orderBy} ${orderDirection}
-            LIMIT 1 )[SAFE_OFFSET](0) ${alias}`;
+            IGNORE NULLS ORDER BY ${orderBy} ${orderDirection}
+            LIMIT 1)[SAFE_OFFSET](0) ${alias}`;
+};
+
+// Generate SQL to return the first or last value of an array aggregation used in click_ids Struct
+const generateClickIdTrafficSourceSQL = (clickIdStruct, clickIdsArray, column = null, orderTypeAsc = true, orderBy = 'time.event_timestamp_utc') => {
+    const alias = column === null ? "" : `AS ${column || "click_id"}`;
+    const orderDirection = orderTypeAsc ? "asc" : "desc";
+
+    const coalesceItems = clickIdsArray.map((item) => `${clickIdStruct}.${item.name}`).join(",\n");
+    // Firstly check if there is any click_id in the session
+    return `
+        ARRAY_AGG(
+            IF(
+                COALESCE(${coalesceItems}) IS NULL, NULL, ${clickIdStruct})
+                )
+            IGNORE NULLS ORDER BY ${orderBy} ${orderDirection}
+            LIMIT 1)[SAFE_OFFSET](0) ${alias}`;
 };
 
 
@@ -49,6 +65,7 @@ const ga4Helpers={
     generateClickIdCoalesceSQL,
     generateClickIdCasesSQL,
     generateTrafficSourceSQL,
+    generateClickIdTrafficSourceSQL,
 };
 
 const helpers = {...coreHelpers, ...ga4Helpers};
