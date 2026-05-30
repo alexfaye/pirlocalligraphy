@@ -112,4 +112,62 @@ WITH source_events AS (
         stream_id,
         user_pseudo_id,
         property_id
+),
+
+source_categories AS (
+    SELECT
+        source,
+        source_category
+    FROM ${ref("source_categories")}
+),
+
+stage_create_session_source_and_time AS (
+    SELECT
+        source_events.* EXCEPT(
+            session_start_timestamp_utc,
+            session_end_timestamp_utc,
+            engagement_time_msec,
+            first_traffic_source,
+            last_traffic_source,
+            first_click_ids,
+            last_click_ids
+        ),
+
+        STRUCT(
+            source_events.session_start_timestamp_utc,
+            source_events.session_end_timestamp_utc,
+            source_events.engagement_time_msec,
+            TIMESTAMP_DIFF(source_events.session_end_timestamp_utc, source_events.session_start_timestamp_utc,
+                SECOND) AS session_duration_s
+        ) AS time,
+
+        (
+            SELECT AS STRUCT(
+                first_traffic_source.*,
+                first_click_ids.*,
+                ${helpers.getDefaultChannelGroupingSQL(config,
+                    'first_traffic_source.source',
+                    'first_traffic_source.medium',
+                    'first_traffic_source.campaign',
+                    'join_fist.source_category',
+                    'first_traffic_source.term',
+                    'first_traffic_source.content',
+                    'first_traffic_source.campaign_id'
+                    )} AS default_channel_grouping
+            ) AS first,
+        ) AS session_source
+
+    FROM source_events
+    LEFT JOIN source_categories AS join_first
+        ON source_events.first_traffic_source LIKE join_first.source
+    LEFT JOIN source_categories AS join_last
+        ON source_events.last_traffic_source LIKE join_last.source
+)
+
+SELECT * EXCEPT(is_multiday_session)
+FROM stage_create_session_source_and_time
+WHERE (
+    session_date >= date_checkpoint
+    OR
+    is_multiday_session
 )
