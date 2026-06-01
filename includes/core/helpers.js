@@ -180,6 +180,49 @@ const generateArrayAggSQL = (
     LIMIT 1) [SAFE_OFFSET(0)] ${alias}`; // Get the first one after sorting by LIMIT 1 which is used in the attribution model
     };
 
+// Generate SELECT statements for a single object
+const getSqlSelectFromRowSQL = (config) => {
+    return Objects.entries(config).map(([Key, value]) => {
+        if(typeof value === "number"){
+            return `${value} AS ${key}`;
+        } else if(key==="date"){
+            return `DATE '${value}' AS ${key}`;
+        } else if(key === "event_timestamp" && !/^\d+$/.test(value)){
+            return `TIMESTAMP '${value} AS ${key}'`;
+        } else if(key === "session_start" && !/^\d+$/.test(value)){
+            return `TIMESTAMP '${value} AS ${key}'`;
+        } else if(key === "session_end" && !/^\d+$/.test(value)){
+            return `TIMESTAMP '${value} AS ${key}'`;
+        } else if(typeof value === "string"){
+            if(key === "int_value") return `${parseInt(value)} AS ${key}`;
+            if(key.indexOf("timestamp") > -1) return `${parseInt(value)} AS ${key}`;
+            if(key === "float_value" || key === "double_value") return `${parseFloat(value)} AS ${key}`;
+            return `'${value} AS ${key}'`;
+        } 
+        else if(value === null) return `${value} AS ${key}`;
+        else if(value instanceof Array) return `[${getSqlSelectFromRowSQL(value)}] AS ${key}`;
+        else {
+            if (isStringInteger(key)) return `STRUCT(${getSwlSelectFromRowSQL(value)})`;
+            else return `STRUCT(${getSqlSelectFromRowSQL(value)}) AS ${key}`;
+        }
+
+    })
+    .join(", ");
+};
+
+// Genereate SELECT statements for list of objects and concatenate them with UNION ALL
+// This is used to create list of source_cagegories based on JSON file
+const getSqlUnionAllFromRowsSQL = (rows) => {
+    try{
+        const selectStatements = rows.map((row) => "SELECT" + getSqlSelectFromRowSQL(row)).join("\nUNION ALL\n");
+        return selectStatements;
+    } catch(error){
+        console.error("Error reading or parsing rows", error);
+    }
+};
+
+
+
 const helpers = {
     getModuleConfig,
     getConfigByType,
@@ -190,6 +233,7 @@ const helpers = {
     generateFilterTypeFromListSQL,
     lowerSQL,
     generateArrayAggSQL,
+    getSqlUnionAllFromRowsSQL,
 };
 
 module.exports = {helpers};
