@@ -182,22 +182,21 @@ const generateArrayAggSQL = (
 
 // Generate SELECT statements for a single object
 const getSqlSelectFromRowSQL = (config) => {
-    return Objects.entries(config).map(([Key, value]) => {
+    // Object.entries() can convert an object to a key-value array
+    // map([key, value]) is called array destructing
+    return Object.entries(config).map(([key, value]) => {
         if(typeof value === "number"){
             return `${value} AS ${key}`;
-        } else if(key==="date"){
-            return `DATE '${value}' AS ${key}`;
-        } else if(key === "event_timestamp" && !/^\d+$/.test(value)){
-            return `TIMESTAMP '${value} AS ${key}'`;
-        } else if(key === "session_start" && !/^\d+$/.test(value)){
-            return `TIMESTAMP '${value} AS ${key}'`;
-        } else if(key === "session_end" && !/^\d+$/.test(value)){
-            return `TIMESTAMP '${value} AS ${key}'`;
-        } else if(typeof value === "string"){
+        } 
+        else if(key ==="date") return `DATE '${value}' AS ${key}`;
+        else if(key === "event_timestamp" && !/^\d+$/.test(value)) return `TIMESTAMP '${value}' AS ${key}`;
+        else if(key === "session_start" && !/^\d+$/.test(value)) return `TIMESTAMP '${value}' AS ${key}`;
+        else if(key === "session_end" && !/^\d+$/.test(value)) return `TIMESTAMP '${value}' AS ${key}`;
+        else if(typeof value === "string"){
             if(key === "int_value") return `${parseInt(value)} AS ${key}`;
             if(key.indexOf("timestamp") > -1) return `${parseInt(value)} AS ${key}`;
             if(key === "float_value" || key === "double_value") return `${parseFloat(value)} AS ${key}`;
-            return `'${value} AS ${key}'`;
+            return `'${value}' AS ${key}`;
         } 
         else if(value === null) return `${value} AS ${key}`;
         else if(value instanceof Array) return `[${getSqlSelectFromRowSQL(value)}] AS ${key}`;
@@ -205,7 +204,6 @@ const getSqlSelectFromRowSQL = (config) => {
             if (isStringInteger(key)) return `STRUCT(${getSwlSelectFromRowSQL(value)})`;
             else return `STRUCT(${getSqlSelectFromRowSQL(value)}) AS ${key}`;
         }
-
     })
     .join(", ");
 };
@@ -220,8 +218,6 @@ const getSqlUnionAllFromRowsSQL = (rows) => {
         console.error("Error reading or parsing rows", error);
     }
 };
-
-
 
 const helpers = {
     getModuleConfig,
