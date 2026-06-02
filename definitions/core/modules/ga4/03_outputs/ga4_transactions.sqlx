@@ -1,0 +1,29 @@
+config {
+    type: "table",
+    description: "Transaction table with nested items, transaction totals and running totals based on user_pseudo_id",
+    schema: dataform.projectConfig.vars.OUTPUTS_DATASET,
+    tags: ["transaction", "outputs"],
+    bigquery: {
+        partitionBy: "transaction_date"
+    },
+    columns: require("includes/core/documentation/helpers.js").ga4Transactions
+}
+
+js{
+    const { helpers} = require("includes/core/modules/ga4/helpers");
+    const config = helpers.getModuleConfig('ga4');
+}
+
+pre_operations {
+}
+
+WITH source_transactions AS (
+    SELECT
+        *,
+        IF(
+
+        1) AS duplicate_count
+
+    FROM ${ref("int_ga4_transactions")}
+),
+
