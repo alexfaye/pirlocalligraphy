@@ -124,6 +124,7 @@ source_categories AS (
 stage_create_session_source_and_time AS (
     SELECT
         source_events.* EXCEPT(
+            -- Move the time-related fields into a single Struct in order to make the reports clean and easy to use
             session_start_timestamp_utc,
             session_end_timestamp_utc,
             engagement_time_msec,
@@ -141,20 +142,41 @@ stage_create_session_source_and_time AS (
                 SECOND) AS session_duration_s
         ) AS time,
 
+        -- SElECT AS STRUCT() is used because .* is used here which is not allowed in STRUCT()
+        -- Finally the data structure here is like:
+        -- {"session_source":{"first":{"source", "medium", "campaign", "gclid", "default_channel_grouping"}}, {"last":{}}}
+        -- therefore the data analyst can use "select session_source.first.default_channel_grouping from ..."
         (
-            SELECT AS STRUCT(
-                first_traffic_source.*,
-                first_click_ids.*,
-                ${helpers.getDefaultChannelGroupingSQL(config,
-                    'first_traffic_source.source',
-                    'first_traffic_source.medium',
-                    'first_traffic_source.campaign',
-                    'join_fist.source_category',
-                    'first_traffic_source.term',
-                    'first_traffic_source.content',
-                    'first_traffic_source.campaign_id'
-                    )} AS default_channel_grouping
-            ) AS first,
+            SELECT AS STRUCT
+                (
+                    SELECT AS STRUCT
+                        first_traffic_source.*,
+                        first_click_ids.*,
+                        ${helpers.getDefaultChannelGroupingSQL(config,
+                        'first_traffic_source.source',
+                        'first_traffic_source.medium',
+                        'first_traffic_source.campaign',
+                        'join_first.source_category',
+                        'first_traffic_source.term',
+                        'first_traffic_source.content',
+                        'first_traffic_source.campaign_id'
+                        )} AS default_channel_grouping
+                    ) AS first,
+
+                (
+                    SELECT AS STRUCT
+                        last_traffic_source.*,
+                        last_click_ids.*,
+                        ${helpers.getDefaultChannelGroupingSQL(config,
+                        'last_traffic_source.source',
+                        'last_traffic_source.medium',
+                        'last_traffic_source.campaign',
+                        'join_last.source_category',
+                        'last_traffic_source.term',
+                        'last_traffic_source.content',
+                        'last_traffic_source.campaign_id'
+                        )} AS default_channel_grouping
+                    ) AS last
         ) AS session_source
 
     FROM source_events
@@ -167,7 +189,7 @@ stage_create_session_source_and_time AS (
 SELECT * EXCEPT(is_multiday_session)
 FROM stage_create_session_source_and_time
 WHERE (
-    session_date >= date_checkpoint
+    session_date >= date_checkpoint -- Do not ask BigQuery to refresh the whole data in ga4_events
     OR
-    is_multiday_session
+    is_multiday_session -- Some session may cover overnight so this one should be included
 )

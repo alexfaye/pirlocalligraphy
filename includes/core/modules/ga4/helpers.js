@@ -60,12 +60,93 @@ const generateClickIdTrafficSourceSQL = (clickIdStruct, clickIdsArray, column = 
             LIMIT 1)[SAFE_OFFSET](0) ${alias}`;
 };
 
+// Generate SQL for CASE statement to determine the channel grouping based on provided parameters
+// This logic represents the default channel grouping logic in GA4
+const getDefaultChannelGroupingSQL = (config, source, medium, campaign, category, term, content, campaignId) => {
+    return `
+        case
+            when(coalesce(${source}, ${medium}, ${campaign}, ${term}, ${content}, ${campaignId}) is not null)
+            or (${source} = 'direct' and (${medium} = '(none)' or ${medium} = '(not set'))
+            then 'Direct'
+
+            when(regexp_contains(${source}, r"^(${config.SOCIAL_PLATFORMS_REGEX})$")
+            or ${category} = 'SOURCE_CATEGORY_SOCIAL')
+            and regexp_contains(${medium}, r"^(.*cp.*|ppc|retargeting|paid.*)$")
+            then 'Paid Social'
+
+            when regexp_contains(${source}, r"^(${config.SOCIAL_PLATFORMS_REGEX})$")
+            or ${medium} in ("social", "social-network", "social-media", "sm", "social network", "social media")
+            or ${category} = 'SOURCE_CATEGORY_SOCIAL'
+            then 'Organic Social'
+
+            when regexp_contains(${medium}, r"email|e-mail|e_mail|e mail|newsletter")
+            or regexp_contains(${source}, r"email|e-mail|e_mail|e mail|newsletter")
+            then 'Email'
+
+            when regexp_contains(${medium}, r"affiliate|affiliates")
+            then 'Affiliates'
+
+            when ${category} = 'SOURCE_CATEGORY_SHOPPING'
+            and regexp_contains(${medium}, r"^(.*cp.*|ppc|paid.*)$")
+            then 'Paid Shopping'
+
+            when ${category} = 'SOURCE_CATEGORY_SHOPPING'
+            or ${campaign} = 'Shopping Free Listings'
+            or ${medium} = 'shopping_free'
+            then 'Organic Shopping'
+
+            when (${categtory} = 'SOURCE_CATEGORY_VIDEO' and regexp_contains(${medium}, r"^(.*cp.*|ppc|paid.*)$")))
+            or ${souce} = 'dv360_video'
+            then 'Paid Video'
+
+            when regexp_contains(${medium}, r"^(display|cpm|banner)$")
+            or ${source} = 'dv360_display'
+            then 'Display'
+
+            when ${category} = 'SOURCE_CATEGORY_SEARCH'
+            and regexp_contains(${medium}, r"^(.*cp.*|ppc|retargeting|paid.*)$")
+            then 'Paid Search'
+
+            when regexp_contains(${medium}, r"^(cpv|cpa|cpp|cpc|content-text)$")
+            then 'Other Advertising'
+
+            when ${medium} = 'organic' or ${category} = 'SOURCE_CATEGORY_SEARCH'
+            then 'Organic Search'
+
+            when ${category} = 'SOURCE_CATEGORY_VIDEO'
+            or regexp_contains(${medium}, r"^(.*video.*)$")
+            then 'Organic Video'
+
+            when ${config.EXTRA_CHANNEL_GROUPS}
+            and ${medium} = 'referral'
+            and ${category} = 'SOURCE_CATEGORY_AI'
+            then 'Organic AI'
+
+            when ${medium} in ("referral", "app", "link")
+            then 'Referral'
+
+            when ${medium} = 'audio'
+            then 'Audio'
+
+            when ${medium} = 'sms'
+            or ${source} = 'sms'
+            then 'SMS'
+
+            when regexp_contains(${medium}, r"(mobile|notification|push$)")
+            or ${source} = 'firebase'
+            then 'Mobile Push Notification'
+
+            else '(Other)'
+        end 
+    `;
+};
 
 const ga4Helpers={
     generateClickIdCoalesceSQL,
     generateClickIdCasesSQL,
     generateTrafficSourceSQL,
     generateClickIdTrafficSourceSQL,
+    getDefaultChannelGroupingSQL,
 };
 
 const helpers = {...coreHelpers, ...ga4Helpers};
