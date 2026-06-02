@@ -34,5 +34,14 @@ pre_operations{
 }
 
 WITH source_sessions AS (
-
+    SELECT
+    FROM ${ref("int_ga4_sessions")}
+    WHERE session_date >= date_checkpoint - INTERVAL ${config.LAST_NON_DIRECT_LOOKBACK_DAYS} DAY
+    -- Ideally each row in int_ga4_sessions reprensents only one unique session but actually
+    -- there might be some duplicates due to the data backfilling, cross-day sessions etc
+    -- Keep evety visitor's sessions with the latest end time within lookback days
+    QUALIFY ROW_NUMBER() OVER(
+        PARTITION BY session_id
+        ORDER BY time.session_start_timestamp_utc ASC, time.session_end_timestamp_utc DESC
+    ) = 1
 ),
