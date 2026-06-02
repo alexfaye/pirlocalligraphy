@@ -1,0 +1,85 @@
+config {
+    type: "incremental",
+    description: "Transaction table with nested items so could be used as line_items table",
+    schema: dataform.projectConfig.vars.TRANSFORMATION_DATASET,
+    tags: ["intermediate"],
+    bigquery: {
+        partitionBy: "transaction_date"
+    },
+    columns: require("includes/core/documentation/helpers.js").ga4Transactions
+}
+
+js{
+    const { helpers} = require("includes/core/modules/ga4/helpers");
+    const config = helpers.getModuleConfig('ga4');
+}
+
+pre_operations {
+    DECLARE date_checkpoint DATE;
+    SET date_checkpoint = (
+        ${when(incremental(),
+            `SELECT COALESCE(MAX(transaction_date)+1, DATE('${config.GA4_START_DATE}'))
+            FROM ${self()}
+            WHERE is_final = true`,
+            `SELECT DATE('${config.GA4_START_DATE}')`)}
+    );
+
+    ${when(incremental(), `DELETE FROM ${self() WHERE transaction_date >= date_checkpoint}`)}
+}
+
+WITH source_purchase_and_refund_events AS (
+    SELECT * FROM ${ref("ga4_events")}
+    WHERE
+        event_date >= date_checkpoint
+    AND
+        event_name IN ('purchase', 'refund')
+),
+
+final_add_items_totals AS (
+    SELECT
+        event_name,
+        event_date AS transaction_date,
+        is_final,
+        ecommerce.transaction_id,
+        event_id,
+        session_id,
+        user_pseudo_id,
+        user_id,
+        ${config.TRANSACTION_TOTALS_UID} AS uid,
+        property_id,
+        stream_id,
+        time,
+        event_params.currency,
+        event_params.coupon,
+
+        STRUCT(
+            ecommerce.total_item_quantity,
+            ecommerce.purchase_revenue_in_usd,
+            ecommerce.purchase_revenue,
+            ecommerce.shipping_value_in_usd,
+            ecommerce.shipping_value,
+            ecommerce.tax_value_in_usd,
+            ecommerce.tax_value,
+            ecommerce.unique_items,
+            ecommerce.refund_value_in_usd,
+            ecoomerce.refund_value
+        ) AS ecommerce,
+
+        items,
+
+        STRUCT(
+            (SELECT SUM(i.quantity) FROM UNNEST(items) AS i) AS quantity,
+            (SELECT SUM(i.revenue) FROM UNNEST(items) AS i) AS item_revenue,
+            (SELECT SUM(i.revenue_in_usd) FROM UNNEST(items) AS i) AS item_revenue_in_usd,
+            (SELECT SUM(i.refund) FROM UNNEST(items) AS i) AS item_refund,
+            (SELECT SUM(i.refund_value_in_usd) FROM UNNEST(items) AS i) AS item_refund_in_usd,
+            -- item numbers that has used coupons
+            (SELECT COUNTIF(i.coupon IS NOT NULL AND i.coupon != '(not set)') FROM UNNEST(items) AS i) AS coupons,
+            -- coupon numbers that has been used
+            (SELECT COUNT(DISTINCT IF(i.coupon = '(not set)', NULL, i.coupon)) FROM UNNEST(items) AS i) AS unique_coupons
+        ) AS item_totals
+
+    FROM source_purchase_and_refund_events
+)
+
+SELECT * FROM final_add_items_totals
