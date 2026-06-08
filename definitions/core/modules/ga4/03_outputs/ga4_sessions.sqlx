@@ -29,19 +29,53 @@ pre_operations{
         }
     };
 
-    ${when(incremental(),
-        `DELETE FROM ${self()} WHERE session_date >= date_checkpoint`)}
+    ${when(incremental(), `DELETE FROM ${self()} WHERE session_date >= date_checkpoint`)}
 }
 
 WITH source_sessions AS (
-    SELECT
-    FROM ${ref("int_ga4_sessions")}
+    SELECT * FROM ${ref("int_ga4_sessions")}
     WHERE session_date >= date_checkpoint - INTERVAL ${config.LAST_NON_DIRECT_LOOKBACK_DAYS} DAY
     -- Ideally each row in int_ga4_sessions reprensents only one unique session but actually
     -- there might be some duplicates due to the data backfilling, cross-day sessions etc
+    
     -- Keep evety visitor's sessions with the latest end time within lookback days
+    -- as it is an incremental table so session_date >= date_checkpoint is very needed but also need to
+    -- look back for a range of days to find the related sessions
     QUALIFY ROW_NUMBER() OVER(
         PARTITION BY session_id
         ORDER BY time.session_start_timestamp_utc ASC, time.session_end_timestamp_utc DESC
     ) = 1
+),
+
+stage_add_last_non_direct AS (
+    SELECT
+        *,
+        IF(
+            session_info.is_with_source,
+            session_source.first,
+
+            LAST_VALUE(
+                IF(
+                    COALESCE(
+                        session_source.last.campaign_id,
+                        session_source.last.campaign,
+                        session_source.last.source,
+                        session_source.last.medium,
+                        session_source.last.term,
+                        session_source.last.content,
+                        ${helpers.getClickIdsDimensionsSQL(config.CLICK_IDS_ARRAY, 'session_source.last')}
+                    ) IS NULL,
+                NULL, session_source.last)
+            INGORE NULLS
+            ) OVER lookback_window
+
+        ) AS last_non_direct_traffic_source
+
+    FROM source_sessions
+
+    WINDOW lookback_window AS (
+        PARTITION BY user_pseudo_id
+        ORDER BY UNIX_MILLIS(time.session_start_timestamp_utc)
+        RANGE BETWEEN ${config.LAST_NON_DIRECT_LOOKBACK_DAYS * 24 * 3600 * 1000} PRECEDING AND CURRENT ROW
+    )
 ),
