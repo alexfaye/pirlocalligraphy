@@ -66,16 +66,33 @@ stage_add_last_non_direct AS (
                         ${helpers.getClickIdsDimensionsSQL(config.CLICK_IDS_ARRAY, 'session_source.last')}
                     ) IS NULL,
                 NULL, session_source.last)
-            INGORE NULLS
-            ) OVER lookback_window
+            IGNORE NULLS
+            ) OVER (
+                PARTITION BY user_pseudo_id
+                ORDER BY UNIX_MILLIS(time.session_start_timestamp_utc)
+                RANGE BETWEEN ${config.LAST_NON_DIRECT_LOOKBACK_DAYS * 24 * 3600 * 1000} PRECEDING AND CURRENT ROW
+            )
 
         ) AS last_non_direct_traffic_source
 
     FROM source_sessions
-
-    WINDOW lookback_window AS (
-        PARTITION BY user_pseudo_id
-        ORDER BY UNIX_MILLIS(time.session_start_timestamp_utc)
-        RANGE BETWEEN ${config.LAST_NON_DIRECT_LOOKBACK_DAYS * 24 * 3600 * 1000} PRECEDING AND CURRENT ROW
-    )
 ),
+
+-- Rewrite NULL default channel grouping to Direct 
+final_add_direct_to_dcg AS (
+    SELECT
+        * EXCEPT(session_source)
+        REPLACE(
+            (
+                SELECT AS session_start_timestamp_utc
+                    last_non_direct_traffic_source.* EXCEPT(default_channel_grouping),
+                    COALESCE(last_non_direct_traffic_source.default_channel_grouping, "Direct") AS default_channel_grouping
+            ) AS last_non_direct_traffic_source
+        ),
+
+        session_source.first AS session_source
+    FROM stage_add_last_non_direct
+),
+
+-- Do not forget the WHERE clause
+SELECT * FROM final_add_direct_to_dcg WHERE session_date >= date_checkpoint

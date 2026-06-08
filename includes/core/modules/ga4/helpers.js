@@ -141,12 +141,18 @@ const getDefaultChannelGroupingSQL = (config, source, medium, campaign, category
     `;
 };
 
+// Generate SQL to concatenate click_ids column names
+const getClickIdsDimensionsSQL = (clickIds, prefix) => {
+    return clickIds.map((id) => `${prefix}.${id.name}`).join(",\n");
+};
+
 const ga4Helpers={
     generateClickIdCoalesceSQL,
     generateClickIdCasesSQL,
     generateTrafficSourceSQL,
     generateClickIdTrafficSourceSQL,
     getDefaultChannelGroupingSQL,
+    getClickIdsDimensionsSQL,
 };
 
 const helpers = {...coreHelpers, ...ga4Helpers};
