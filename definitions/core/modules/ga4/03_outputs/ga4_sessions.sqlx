@@ -78,21 +78,23 @@ stage_add_last_non_direct AS (
     FROM source_sessions
 ),
 
--- Rewrite NULL default channel grouping to Direct 
+-- Rewrite NULL default channel grouping to Direct
 final_add_direct_to_dcg AS (
     SELECT
         * EXCEPT(session_source)
         REPLACE(
             (
-                SELECT AS session_start_timestamp_utc
+                SELECT AS STRUCT
                     last_non_direct_traffic_source.* EXCEPT(default_channel_grouping),
                     COALESCE(last_non_direct_traffic_source.default_channel_grouping, "Direct") AS default_channel_grouping
             ) AS last_non_direct_traffic_source
         ),
-
+        -- Simplify the session_source Struct so that it is easy to use session_source.source in the reports
         session_source.first AS session_source
     FROM stage_add_last_non_direct
 ),
 
 -- Do not forget the WHERE clause
+-- In CTE stage_add_last_non_direct more data back to LAST_NON_DIRECT_LOOKBACK_DAYS is retrieved in order to find the
+-- potential session source so these data should not be written into database and removed here
 SELECT * FROM final_add_direct_to_dcg WHERE session_date >= date_checkpoint
