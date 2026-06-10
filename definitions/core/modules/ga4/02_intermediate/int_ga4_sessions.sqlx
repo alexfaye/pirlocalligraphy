@@ -10,8 +10,8 @@ config {
     }
 }
 
-js{
-    const { helpers} = require("includes/core/modules/ga4/helpers");
+js {
+    const { helpers } = require("includes/core/modules/ga4/helpers");
     const config = helpers.getModuleConfig('ga4');
 }
 
@@ -45,7 +45,7 @@ WITH source_events AS (
         ${helpers.generateArrayAggSQL('app_info')}, -- app_info is a Struct in ga4_events
         ${helpers.generateArrayAggSQL('platform')},
 
-        -- page is a Struct defined in ga4_events
+        -- page is a STRUCT defined in ga4_events
         STRUCT(
             ${helpers.generateArrayAggSQL('page.location', 'landing_page_location')},
             ${helpers.generateArrayAggSQL('page.path', 'landing_page_path')},
