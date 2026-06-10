@@ -497,7 +497,7 @@ stage_create_fixed_traffic_source AS (
                 -- If there exists clickId, that should be from ads
                 THEN
                     CASE
-                        ${helpers.generateClickIdCaseSQL(config.CLICK_IDS_ARRAY, "source")}
+                        ${helpers.generateClickIdCasesSQL(config.CLICK_IDS_ARRAY, "source")}
                     -- otherwise that is from organic search
                     ELSE fixed_traffic_source.source
                 END
@@ -510,7 +510,7 @@ stage_create_fixed_traffic_source AS (
                 OR (fixed_traffic_source.medium IS NULL AND fixed_traffic_source.campaign IS NULL)
                 THEN
                     CASE
-                        ${helpers.generateClickIdCaseSQL(config.CLICK_IDS_ARRAY, 'medium')}
+                        ${helpers.generateClickIdCasesSQL(config.CLICK_IDS_ARRAY, 'medium')}
                     ELSE fixed_traffic_source.medium
                 END
 
