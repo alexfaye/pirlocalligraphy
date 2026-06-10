@@ -146,6 +146,15 @@ const getClickIdsDimensionsSQL = (clickIds, prefix) => {
     return clickIds.map((id) => `${prefix}.${id.name}`).join(",\n");
 };
 
+const generateTransactionsDedupeSQL = (tf) => {
+    if(tf){
+        return `qualify duplicate_count = 1`;
+    }
+    else{
+        return ``;
+    }
+};
+
 const ga4Helpers={
     generateClickIdCoalesceSQL,
     generateClickIdCasesSQL,
@@ -153,6 +162,7 @@ const ga4Helpers={
     generateClickIdTrafficSourceSQL,
     getDefaultChannelGroupingSQL,
     getClickIdsDimensionsSQL,
+    generateTransactionsDedupeSQL,
 };
 
 const helpers = {...coreHelpers, ...ga4Helpers};
