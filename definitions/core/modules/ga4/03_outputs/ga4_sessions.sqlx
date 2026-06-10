@@ -7,7 +7,7 @@ config {
         partitionBy: "session_date",
         clusterBy: ["session_id"]
     },
-    columns: require("includes/core/documentation/helpers.js").ga4sessions
+    columns: require("includes/core/documentation/helpers.js").ga4Sessions
 }
 
 js {
@@ -23,8 +23,8 @@ pre_operations{
     DECLARE date_checkpoint DATE;
     SET date_checkpoint = {
         ${when(incremental(),
-            `SELECT COALESCE(MAX(session_date)+1, DATE('${config.GA4_START_DATE}')) from ${self()}
-            where is_final=true`,
+            `SELECT COALESCE(MAX(session_date) + 1, DATE('${config.GA4_START_DATE}')) FROM ${self()}
+            WHERE is_final = true`,
             `SELECT DATE('${config.GA4_START_DATE}')`)
         }
     };
