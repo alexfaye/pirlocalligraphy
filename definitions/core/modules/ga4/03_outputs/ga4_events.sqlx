@@ -10,9 +10,9 @@ config {
     columns: require("includes/core/documentation/helpers.js").ga4Events
 }
 
-js{
+js {
     // It returns the whole js file and needs to find and match helpers object
-    const {helpers} = require("includes/core/modules/ga4/helpers.js");
+    const { helpers } = require("includes/core/modules/ga4/helpers.js");
     // It returns the object already so just needs a variable to refer to
     const config = helpers.getModuleConfig("ga4");
     // check if there is invalid columns or duplicate columns in the custom config

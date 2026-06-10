@@ -9,8 +9,8 @@ config {
     columns: require("includes/core/documentation/helpers.js").ga4Transactions
 }
 
-js{
-    const { helpers} = require("includes/core/modules/ga4/helpers");
+js {
+    const { helpers } = require("includes/core/modules/ga4/helpers");
     const config = helpers.getModuleConfig('ga4');
 }
 
