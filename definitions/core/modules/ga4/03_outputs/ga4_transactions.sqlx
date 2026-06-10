@@ -17,13 +17,131 @@ js{
 pre_operations {
 }
 
+-- Sometimes ecommerce customers may refresh the thankyou page after the payment which may lead to double-counting issue
+-- so this duplicated transaction records caused should be removed
 WITH source_transactions AS (
     SELECT
         *,
         IF(
-
-        1) AS duplicate_count
+            event_name = 'purchase',
+            ROW_NUMBER() OVER(
+                PARTITION BY
+                    -- If anything wrong with the transanction_id from the ecommcerce system and transaction_id becomes
+                    -- NULL, we still can find the unique purchase event by using event_id we created
+                    COALESCE(transaction_id, CAST(event_id AS STRING))
+                ORDER BY time.event_timestamp
+            ) ,1) AS duplicate_count
 
     FROM ${ref("int_ga4_transactions")}
+    ${helpers.generateTransactionsDedupeSQL(config.TRANSACTIONS_DEDUPE)}
+
 ),
 
+stage_purchases AS (
+    SELECT
+        * EXCEPT(event_name, item_totals)
+        STRUCT(
+            item_totals.quantity,
+            item_totals.item_revenue,
+            item_totals.item_revenue_in_usd,
+            item_totals.coupons,
+            item_totals.unique_coupons
+        ) AS item_totals,
+
+        duplicate_count > 1 AS is_duplicate,
+
+        -- This STRUCT uses RFM model to analyse the every user's behaviors
+        STRUCT(
+            IF(uid IS NULL, NULL, ROW_NUMBER() OVER user) AS transactions,
+            IF(uid IS NULL, NULL, SUM(ecommerce.purchase_revenue) OVER user) AS purchase_revenue,
+            IF(uid IS NULL, NULL, SUM(ecommerce.purchase_revenue_in_usd) OVER user) AS purchase_revenue_in_usd,
+            IF(uid IS NULL, NULL, SUM(ecommerce.total_item_quantity) OVER user) AS total_item_quantity,
+
+            -- The last time when buyers made the purchase
+            IF(uid IS NULL, NULL, TIMESTAMP_DIFF(
+                time.event_timestamp_utc,
+                LAG(time.event_timestamp_utc) OVER user,
+                SECOND)
+            ) AS seconds_since_previous_purchase,
+
+            -- The next time when buyers made the purchase
+            IF(uid IS NULL, NULL, TIMESTAMP_DIFF(
+                LEAD(time.event_timestamp_utc) OVER user,
+                time.event_timestamp_utc,
+                SECOND)
+            ) AS seconds_to_next_purchase
+        ) AS running_totals
+
+    FROM source_transactions
+    WHERE event_name = 'purchase'
+    WINDOW user AS (PARTITION BY uid ORDER BY time.event_timestamp)
+),
+
+stage_refunds AS (
+    SELECT
+        transaction_id,
+        -- Calculate the number of refunds within a transaction
+        COUNT(*) AS number_of_refunds,
+
+        STRUCT(
+            MIN(time.event_timestamp_utc) AS min_refund_timestamp, -- The earliest refund
+            MAX(time.event_timestamp_utc) AS max_refund_timestamp, -- The latest refund
+
+            STRUCT(
+                SUM(item_totals.quantity) AS quantity,
+                SUM(item_totals.item_refund_in_usd) AS item_refund_in_usd,
+                SUM(item_totals.item_refund) AS item_refund
+            ) AS refund_item_totals,
+
+            -- Every details of refund retained in the array for micro anaysis
+            ARRAY_AGG(
+                STRUCT(
+                    event_id,
+                    session_id,
+                    user_pseudo_id,
+                    user_id,
+                    uid,
+                    stream_id,
+                    platform,
+                    time,
+                    currency,
+                    coupon,
+                    items AS items,
+                    STRUCT(
+                        item_totals.quantity,
+                        item_totals.item_refund_in_usd,
+                        item_totals.item_refund,
+                        item_totals.coupons,
+                        item_totals.unique_coupons
+                    ) AS item_totals
+                )
+            ) AS refunds
+
+        ) AS refund_info
+
+    FROM source_transactions
+    WHERE event_name = 'refunds'
+    GROUP BY ALL -- Aggregate all the non-aggragation fields
+),
+
+final_add_totals AS (
+    SELECT
+        stage_purchases.*,
+
+        -- Using COALESCE() to avoid non-refund transaction. In SQL 100 - NULL = NULL
+        -- Using ABS() to make sure all the refunds are positive number
+        STRUCT(
+            item_totals.quantity - COALESCE(ABS(refund_info.refund_item_totals.quantity), 0) AS quantity,
+            item_totals.item_refund_in_usd - COALESCE(ABS(refund_info.refund_item_totals.item_refund_in_usd), 0) AS item_revenue_in_usd,
+            item_totals.item_revenue - COALESCE(ABS(refund_info.refund_item_totals.item_refund), 0) AS item_revenue
+        ) AS net_item_totals,
+
+        COALESCE(stage_refunds.number_of_refunds, 0) AS number_of_refunds,
+        stage_refunds.* EXCEPT(transaction_id, number_of_refunds)
+
+    FROM stage_purchases
+    -- Not every trasaction will have a refund so left join must be used here
+    LEFT JOIN stage_refunds USING (transaction_id)
+),
+
+SELECT * FROM final_add_totals
