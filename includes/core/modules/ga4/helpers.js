@@ -96,7 +96,7 @@ const getDefaultChannelGroupingSQL = (config, source, medium, campaign, category
             then 'Organic Shopping'
 
             when (${category} = 'SOURCE_CATEGORY_VIDEO' and regexp_contains(${medium}, r"^(.*cp.*|ppc|paid.*)$")))
-            or ${souce} = 'dv360_video'
+            or ${source} = 'dv360_video'
             then 'Paid Video'
 
             when regexp_contains(${medium}, r"^(display|cpm|banner)$")
