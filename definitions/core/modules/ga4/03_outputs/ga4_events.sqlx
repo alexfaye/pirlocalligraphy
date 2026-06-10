@@ -23,8 +23,8 @@ pre_operations {
     DECLARE date_checkpoint DATE;
     SET date_checkpoint = {
         ${when(incremental(),
-            `SELECT COALESCE(MAX(event_date)+1, DATE('${config.GA4_START_DATE}')) from ${self()}
-            where is_final=true`,
+            `SELECT COALESCE(MAX(event_date) + 1, DATE('${config.GA4_START_DATE}')) FROM ${self()}
+            WHERE is_final = true`,
             `SELECT DATE('${config.GA4_START_DATE}')`)
         }
     };
@@ -63,14 +63,14 @@ stage_unnest_params as (
         table_suffix,
         PARSE_DATE('%Y%m%d', event_date) as event_date, -- partition column
         -- used for incrementality
-        DATE_DIFF(CURRENT_DATE(), CAST(event_date AS DATE FORMAT 'YYYMMDD'), DAY) > $(config.DATE_IS_FUNAL_DAYS) as is_final,
+        DATE_DIFF(CURRENT_DATE(), CAST(event_date AS DATE FORMAT 'YYYMMDD'), DAY) > ${config.DATE_IS_FUNAL_DAYS} as is_final,
 
         STRUCT(
             event_timestamp,
             -- Transfer to timestamp type
             TIMESTAMP_MICROS(event_timestamp) AS event_timestamp_utc,
             user_first_touch_timestamp as user_first_touch_timestamp,
-            TIMESTAPM_MICROS(user_first_touch_timestamp) as user_first_touch_timestamp_utc
+            TIMESTAMP_MICROS(user_first_touch_timestamp) as user_first_touch_timestamp_utc
         ) AS time,
 
         -- User info
@@ -104,7 +104,7 @@ stage_unnest_params as (
             collected_traffic_source.gclid,
             collected_traffic_source.dclid,
             collected_traffic_source.stsltid
-        ) AS coolected_traffic_source,
+        ) AS collected_traffic_source,
 
         STRUCT(
             STRUCT(
@@ -380,13 +380,13 @@ stage_url_parsing_and_event_id AS (
 
         -- click_id from event_params based on config.js
         ${helpers.generateStructSQL(helpers.generateURLParamsSQL(
-            config.CLICK_IDS_ARRAY, 'event.params.page_location', false
+            config.CLICK_IDS_ARRAY, 'event_params.page_location', false
         ))} AS click_ids,
 
         -- Create events_id. GA4 raw data does not contain an Event ID (a unique event identifier)
         FARM_FINGERPRINT(
             event_name
-            || time.event_timestamp,
+            || time.event_timestamp
             || COALESCE(user_pseudo_id, 'no')
             || COALESCE(event_params.ga_session_id, 0)
             || COALESCE(batch.batch_page_id, 0)
@@ -422,12 +422,12 @@ stage_traffic_source_coalesce_and_click_ids AS (
             LOWER(COALESCE(collected_traffic_source.manual_medium, IF(batch.batch_ordering_id > 1, NULL, COALESCE(event_params.medium, url_params.utm_medium)))) AS medium,
             LOWER(COALESCE(collected_traffic_source.manual_term, IF(batch.batch_ordering_id > 1, NULL, COALESCE(event_params.term, url_params.utm_term)))) AS term,
             LOWER(COALESCE(collected_traffic_source.manual_content, IF(batch.batch_ordering_id > 1, NULL, COALESCE(event_params.content, url_params.utm_content)))) AS content,
-            LOWER(COALESCE(collected_traffic_source.manual_source_platform, IF(batch.batch_ordering_id > 1, NULL, COALESCE(event_params.source_platform url_params.utm_source_platform)))) AS source_platform,
+            LOWER(COALESCE(collected_traffic_source.manual_source_platform, IF(batch.batch_ordering_id > 1, NULL, COALESCE(event_params.source_platform, url_params.utm_source_platform)))) AS source_platform,
             LOWER(COALESCE(collected_traffic_source.manual_creative_format, IF(batch.batch_ordering_id > 1, NULL, COALESCE(event_params.creative_format, url_params.utm_creative_format)))) AS creative_format,
             LOWER(COALESCE(collected_traffic_source.manual_marketing_tactic, IF(batch.batch_ordering_id > 1, NULL, COALESCE(event_params.marketing_tactic, url_params.utm_marketing_tactic)))) AS marketing_tactic
         ) AS fixed_traffic_source,
 
-        STURCT(
+        STRUCT(
             ${config.CLICK_IDS_ARRAY.map(id => helpers.generateClickIdCoalesceSQL(id)).join(", ")}
         ) AS click_ids,
 
@@ -543,9 +543,8 @@ stage_create_fixed_traffic_source AS (
 stage_add_meta_info AS (
     SELECT  
         * EXCEPT(time),
-        () AS time,
-
-        SELECT AS STRUCT(
+        (
+        SELECT AS STRUCT
             time.*,
             DATETIME(time.event_timestamp_utc, '${dataform.projectConfig.vars.LOCAL_TIMEZONE}') AS timestamp_local,
             DATE(DATETIME(time.event_timestamp_utc, '${dataform.projectConfig.vars.LOCAL_TIMEZONE}')) AS date_local
