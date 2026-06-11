@@ -43,6 +43,7 @@ const generateStructSQL = (sql) => {
 const generateURLParamSQL = (urlParam, column, urlDecode = true) => {
     let value = `regexp_extract(${column}, r"^[^#]+[?&]${urlParam.name}=([^&#]+)")`;
     value = urlParam.cleaningMethod ? urlParam.cleaningMethod(value) : value;
+    value = urlDecode ? urlDecodeSQL(value) : value;
     return `${value} AS ${urlParam.reNameTo ? urlParam.reNameTo : urlParam.name}`;
 };
 
@@ -218,6 +219,16 @@ const getSqlUnionAllFromRowsSQL = (rows) => {
     }
 };
 
+// Generate SQL to URL decode a column. Used to clean up URL parameters like utm_source e
+const urlDecodeSQL = (urlColumn) => {
+    return `
+        (SELECT SAFE_CONVERT_BYTES_TO_STRING(
+            ARRAY_TO_STRING(ARRAY_AGG(
+                IF(STARTS_WITH(y, '%'), FROM_HEX(SUBSTR(y, 2)), CAST(y AS BYTES)) ORDER BY i), b''))
+        FROM UNNEST(REGEXP_EXTRACT_ALL(${urlColumn}, r"%[0-9a-fA-F]{2}|[^%]+")) AS y WITH OFFSET AS i
+    )`;
+};
+
 const helpers = {
     getModuleConfig,
     getConfigByType,
@@ -229,6 +240,7 @@ const helpers = {
     lowerSQL,
     generateArrayAggSQL,
     getSqlUnionAllFromRowsSQL,
+    urlDecodeSQL
 };
 
 module.exports = {helpers};

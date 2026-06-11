@@ -326,7 +326,7 @@ stage_repack_structs AS (
             ecommerce,
             batch_event_index,
             batch_ordering_id,
-            batch_page_id,
+            batch_page_id
         ),
 
         -- In July 2024 the batch_* parameters were moved to a column. So data before that date should
