@@ -3,7 +3,6 @@ This helpers.js file is core helpers of common functions
 
 */
 
-
 // The following generateParamSQL, generateParamsSQL and generateStructSQL are sometimes
 // working together to generate a 'SELECT FROM UNNEST()' statement based on the config.js
 // like event.params, item_params
