@@ -48,8 +48,8 @@ const generateURLParamSQL = (urlParam, column, urlDecode = true) => {
 };
 
 const generateURLParamsSQL = (urlParamsArray, column, urlDecode = true) => {
-    return `${urlParamsArray.map((urlParam) => {
-        generateURLParamSQL(urlParam, column, urlDecode)}).join(",\n")
+    return `${urlParamsArray.map((urlParam) => 
+        generateURLParamSQL(urlParam, column, urlDecode)).join(",\n")
     }`;
 };
 
