@@ -11,16 +11,16 @@ const generateParamSQL = (config, column = "event_params") => {
     // Decimal type of values are all related to currency value and should be converted to Numeric type in BigQuery
     if(config.type === "decimal"){
         value = `(SELECT COALESCE(SAFE_CAST(value.int_value AS Numeric), SAFE_CAST(value.double_value AS Numeric),
-        SAFE_CAST(value.float_value AS Numeric) FROM UNNEST(${column}) WHERE key='${config.name}') `;
+        SAFE_CAST(value.float_value AS Numeric)) FROM UNNEST(${column}) WHERE key = '${config.name}') `;
     }
     else if(config.type === "string"){
         // Sometimes GA4 will make mistake, putting string value into a number field
         value = `(SELECT COALESCE(value.string_value, CAST(value.int_value AS string),
         CAST(value.float_value AS string), CAST(value.double_value AS string))
-        FROM UNNEST(${column}) WHERE key='${config.name}') `;
+        FROM UNNEST(${column}) WHERE key = '${config.name}') `;
     }
     else {
-        value = `(SELECT value.${config.type}_value FROM UNNEST(${column}) WHERE key='${config.name}') `;
+        value = `(SELECT value.${config.type}_value FROM UNNEST(${column}) WHERE key = '${config.name}') `;
     }
     value = config.cleaningMethod ? config.cleaningMethod(value) : value;
     return `${value} AS ${config.reNameTo ? config.reNameTo : config.name}`;
@@ -43,6 +43,7 @@ const generateStructSQL = (sql) => {
 const generateURLParamSQL = (urlParam, column, urlDecode = true) => {
     let value = `regexp_extract(${column}, r"^[^#]+[?&]${urlParam.name}=([^&#]+)")`;
     value = urlParam.cleaningMethod ? urlParam.cleaningMethod(value) : value;
+    value = urlDecode ? urlDecodeSQL(value) : value;
     return `${value} AS ${urlParam.reNameTo ? urlParam.reNameTo : urlParam.name}`;
 };
 
@@ -218,6 +219,16 @@ const getSqlUnionAllFromRowsSQL = (rows) => {
     }
 };
 
+// Generate SQL to URL decode a column. Used to clean up URL parameters like utm_source e
+const urlDecodeSQL = (urlColumn) => {
+    return `
+        (SELECT SAFE_CONVERT_BYTES_TO_STRING(
+            ARRAY_TO_STRING(ARRAY_AGG(
+                IF(STARTS_WITH(y, '%'), FROM_HEX(SUBSTR(y, 2)), CAST(y AS BYTES)) ORDER BY i), b''))
+        FROM UNNEST(REGEXP_EXTRACT_ALL(${urlColumn}, r"%[0-9a-fA-F]{2}|[^%]+")) AS y WITH OFFSET AS i
+    )`;
+};
+
 const helpers = {
     getModuleConfig,
     getConfigByType,
@@ -229,6 +240,7 @@ const helpers = {
     lowerSQL,
     generateArrayAggSQL,
     getSqlUnionAllFromRowsSQL,
+    urlDecodeSQL
 };
 
 module.exports = {helpers};
