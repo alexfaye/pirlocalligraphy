@@ -8,5 +8,5 @@ const selectStatements = helpers.getSqlUnionAllFromRowsSQL(rows);
 // query() is to tell the the publish() where the table data comes from
 publish("source_categories", {
     type: "table",
-    schema: dataform.projectConfig.vars.TRANSFORMATIONS_DATASET,
+    schema: dataform.projectConfig.vars.TRANSFORMATION_DATASET,
 }).query(() => selectStatements);
