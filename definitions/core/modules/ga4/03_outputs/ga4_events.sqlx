@@ -35,8 +35,8 @@ pre_operations {
 
 WITH source_ga4_export AS (
     SELECT
-        *,
         _table_suffix as table_suffix,
+        *
     FROM ${ref("events_*")}
     WHERE
         PARSE_DATE('%Y%m%d', REGEXP_EXTRACT(_table_suffix, '[0-9]+')) >= date_checkpoint
