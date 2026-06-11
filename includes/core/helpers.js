@@ -20,7 +20,7 @@ const generateParamSQL = (config, column = "event_params") => {
         FROM UNNEST(${column}) WHERE key='${config.name}') `;
     }
     else {
-        value = `(SELECT value.${config.type}_value FROM UNNEST(${column})) WHERE key='${config.name}') `;
+        value = `(SELECT value.${config.type}_value FROM UNNEST(${column}) WHERE key='${config.name}') `;
     }
     value = config.cleaningMethod ? config.cleaningMethod(value) : value;
     return `${value} AS ${config.reNameTo ? config.reNameTo : config.name}`;
