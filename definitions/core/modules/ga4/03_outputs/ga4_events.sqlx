@@ -429,7 +429,7 @@ stage_traffic_source_coalesce_and_click_ids AS (
 
         STRUCT(
             ${config.CLICK_IDS_ARRAY.map(id => helpers.generateClickIdCoalesceSQL(id)).join(", ")}
-        ) AS click_ids,
+        ) AS click_ids
 
     FROM stage_discard_synthetic_bundle_events
     WHERE event_date >= date_checkpoint
