@@ -11,16 +11,16 @@ const generateParamSQL = (config, column = "event_params") => {
     // Decimal type of values are all related to currency value and should be converted to Numeric type in BigQuery
     if(config.type === "decimal"){
         value = `(SELECT COALESCE(SAFE_CAST(value.int_value AS Numeric), SAFE_CAST(value.double_value AS Numeric),
-        SAFE_CAST(value.float_value AS Numeric) FROM UNNEST(${column}) WHERE key='${config.name}') `;
+        SAFE_CAST(value.float_value AS Numeric)) FROM UNNEST(${column}) WHERE key = '${config.name}') `;
     }
     else if(config.type === "string"){
         // Sometimes GA4 will make mistake, putting string value into a number field
         value = `(SELECT COALESCE(value.string_value, CAST(value.int_value AS string),
         CAST(value.float_value AS string), CAST(value.double_value AS string))
-        FROM UNNEST(${column}) WHERE key='${config.name}') `;
+        FROM UNNEST(${column}) WHERE key = '${config.name}') `;
     }
     else {
-        value = `(SELECT value.${config.type}_value FROM UNNEST(${column}) WHERE key='${config.name}') `;
+        value = `(SELECT value.${config.type}_value FROM UNNEST(${column}) WHERE key = '${config.name}') `;
     }
     value = config.cleaningMethod ? config.cleaningMethod(value) : value;
     return `${value} AS ${config.reNameTo ? config.reNameTo : config.name}`;
