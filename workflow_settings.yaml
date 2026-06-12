@@ -1,10 +1,10 @@
 defaultProject: bigquery-test-march
-defaultLocation: asia-southeast2
-defaultDataset: pirlo_calligraphy
-defaultAssertionDataset: dataform_assertions_asia
+defaultLocation: australia-southeast1
+defaultDataset: pirlo_calligraphy_s
+defaultAssertionDataset: dataform_assertions
 dataformCoreVersion: 3.0.52
 vars:
-  GA4_DATASET: analytics_454895025
+  GA4_DATASET: pirlo_calligraphy_s
   LOCAL_TIMEZONE: Australia/Adelaide
   OUTPUTS_DATASET: pirlo_calligraphy
   TRANSFORMATION_DATASET: pirlo_calligraphy_i
