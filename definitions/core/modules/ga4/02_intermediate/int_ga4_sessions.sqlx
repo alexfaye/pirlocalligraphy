@@ -181,9 +181,9 @@ stage_create_session_source_and_time AS (
 
     FROM source_events
     LEFT JOIN source_categories AS join_first
-        ON source_events.first_traffic_source LIKE join_first.source
+        ON source_events.first_traffic_source.source LIKE join_first.source
     LEFT JOIN source_categories AS join_last
-        ON source_events.last_traffic_source LIKE join_last.source
+        ON source_events.last_traffic_source.source LIKE join_last.source
 )
 
 SELECT * EXCEPT(is_multiday_session)

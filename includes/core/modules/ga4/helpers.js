@@ -41,7 +41,7 @@ const generateTrafficSourceSQL = (fixedTrafficSourceTable, column = null, orderT
                 ) IS NULL, NULL, ${fixedTrafficSourceTable}
             )
             IGNORE NULLS ORDER BY ${orderBy} ${orderDirection}
-            LIMIT 1)[SAFE_OFFSET](0) ${alias}`;
+            LIMIT 1)[SAFE_OFFSET(0)] ${alias}`;
 };
 
 // Generate SQL to return the first or last value of an array aggregation used in click_ids Struct
@@ -54,10 +54,10 @@ const generateClickIdTrafficSourceSQL = (clickIdStruct, clickIdsArray, column = 
     return `
         ARRAY_AGG(
             IF(
-                COALESCE(${coalesceItems}) IS NULL, NULL, ${clickIdStruct})
-                )
+                COALESCE(${coalesceItems}) IS NULL, NULL, ${clickIdStruct}
+            )
             IGNORE NULLS ORDER BY ${orderBy} ${orderDirection}
-            LIMIT 1)[SAFE_OFFSET](0) ${alias}`;
+            LIMIT 1)[SAFE_OFFSET(0)] ${alias}`;
 };
 
 // Generate SQL for CASE statement to determine the channel grouping based on provided parameters
@@ -95,7 +95,7 @@ const getDefaultChannelGroupingSQL = (config, source, medium, campaign, category
             or ${medium} = 'shopping_free'
             then 'Organic Shopping'
 
-            when (${category} = 'SOURCE_CATEGORY_VIDEO' and regexp_contains(${medium}, r"^(.*cp.*|ppc|paid.*)$")))
+            when (${category} = 'SOURCE_CATEGORY_VIDEO' and regexp_contains(${medium}, r"^(.*cp.*|ppc|paid.*)$"))
             or ${source} = 'dv360_video'
             then 'Paid Video'
 
