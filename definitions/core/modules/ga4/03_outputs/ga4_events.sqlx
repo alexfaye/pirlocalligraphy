@@ -63,7 +63,7 @@ stage_unnest_params as (
         table_suffix,
         PARSE_DATE('%Y%m%d', event_date) as event_date, -- partition column
         -- used for incrementality
-        DATE_DIFF(CURRENT_DATE(), CAST(event_date AS DATE FORMAT 'YYYMMDD'), DAY) > ${config.DATA_IS_FINAL_DAYS} as is_final,
+        DATE_DIFF(CURRENT_DATE(), CAST(event_date AS DATE FORMAT 'YYYYMMDD'), DAY) > ${config.DATA_IS_FINAL_DAYS} as is_final,
 
         STRUCT(
             event_timestamp,
@@ -103,7 +103,7 @@ stage_unnest_params as (
             collected_traffic_source.manual_marketing_tactic,
             collected_traffic_source.gclid,
             collected_traffic_source.dclid,
-            collected_traffic_source.stsltid
+            collected_traffic_source.srsltid
         ) AS collected_traffic_source,
 
         STRUCT(
@@ -147,7 +147,7 @@ stage_unnest_params as (
                 session_traffic_source_last_click.sa360_campaign.ad_group_name,
                 session_traffic_source_last_click.sa360_campaign.creative_format,
                 session_traffic_source_last_click.sa360_campaign.engine_account_name,
-                session_traffic_source_last_click.sa360_campaign.enging_account_type,
+                session_traffic_source_last_click.sa360_campaign.engine_account_type,
                 session_traffic_source_last_click.sa360_campaign.manager_account_name
             ) AS sa360_campaign,
 
@@ -290,8 +290,8 @@ stage_unnest_params as (
                     items.item_list_index,
                     items.promotion_id,
                     items.promotion_name,
-                    items.creatiion_name,
-                    items.creation_slot
+                    items.creative_name,
+                    items.creative_slot
                     -- items.item_params are used to store the user's custom property of items
                     ${when(config.CUSTOM_ITEM_PARAMS_ARRAY.length > 0,
                         `, ${helpers.generateStructSQL(helpers.generateParamsSQL(
@@ -422,9 +422,9 @@ stage_traffic_source_coalesce_and_click_ids AS (
             LOWER(COALESCE(collected_traffic_source.manual_medium, IF(batch.batch_ordering_id > 1, NULL, COALESCE(event_params.medium, url_params.utm_medium)))) AS medium,
             LOWER(COALESCE(collected_traffic_source.manual_term, IF(batch.batch_ordering_id > 1, NULL, COALESCE(event_params.term, url_params.utm_term)))) AS term,
             LOWER(COALESCE(collected_traffic_source.manual_content, IF(batch.batch_ordering_id > 1, NULL, COALESCE(event_params.content, url_params.utm_content)))) AS content,
-            LOWER(COALESCE(collected_traffic_source.manual_source_platform, IF(batch.batch_ordering_id > 1, NULL, COALESCE(event_params.source_platform, url_params.utm_source_platform)))) AS source_platform,
-            LOWER(COALESCE(collected_traffic_source.manual_creative_format, IF(batch.batch_ordering_id > 1, NULL, COALESCE(event_params.creative_format, url_params.utm_creative_format)))) AS creative_format,
-            LOWER(COALESCE(collected_traffic_source.manual_marketing_tactic, IF(batch.batch_ordering_id > 1, NULL, COALESCE(event_params.marketing_tactic, url_params.utm_marketing_tactic)))) AS marketing_tactic
+            LOWER(COALESCE(collected_traffic_source.manual_source_platform, IF(batch.batch_ordering_id > 1, NULL, url_params.utm_source_platform))) AS source_platform,
+            LOWER(COALESCE(collected_traffic_source.manual_creative_format, IF(batch.batch_ordering_id > 1, NULL, url_params.utm_creative_format))) AS creative_format,
+            LOWER(COALESCE(collected_traffic_source.manual_marketing_tactic, IF(batch.batch_ordering_id > 1, NULL, url_params.utm_marketing_tactic))) AS marketing_tactic
         ) AS fixed_traffic_source,
 
         STRUCT(

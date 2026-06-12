@@ -19,7 +19,7 @@ js {
     helpers.checkColumnNames(config);
 }
 
-pre_operations{
+pre_operations {
     DECLARE date_checkpoint DATE;
     SET date_checkpoint = (
         ${when(incremental(),
