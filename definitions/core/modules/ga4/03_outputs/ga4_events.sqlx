@@ -63,7 +63,7 @@ stage_unnest_params as (
         table_suffix,
         PARSE_DATE('%Y%m%d', event_date) as event_date, -- partition column
         -- used for incrementality
-        DATE_DIFF(CURRENT_DATE(), CAST(event_date AS DATE FORMAT 'YYYMMDD'), DAY) > ${config.DATE_IS_FINAL_DAYS} as is_final,
+        DATE_DIFF(CURRENT_DATE(), CAST(event_date AS DATE FORMAT 'YYYMMDD'), DAY) > ${config.DATA_IS_FINAL_DAYS} as is_final,
 
         STRUCT(
             event_timestamp,
