@@ -39,7 +39,8 @@ WITH source_transactions AS (
 
 stage_purchases AS (
     SELECT
-        * EXCEPT(event_name, item_totals)
+        * EXCEPT(event_name, item_totals),
+
         STRUCT(
             item_totals.quantity,
             item_totals.item_revenue,
@@ -93,7 +94,7 @@ stage_refunds AS (
                 SUM(item_totals.item_refund) AS item_refund
             ) AS refund_item_totals,
 
-            -- Every details of refund retained in the array for micro anaysis
+            -- Every details of refund retained in the array for micro analysis
             ARRAY_AGG(
                 STRUCT(
                     event_id,
@@ -142,6 +143,6 @@ final_add_totals AS (
     FROM stage_purchases
     -- Not every trasaction will have a refund so left join must be used here
     LEFT JOIN stage_refunds USING (transaction_id)
-),
+)
 
 SELECT * FROM final_add_totals

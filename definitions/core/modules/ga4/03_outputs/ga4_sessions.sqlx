@@ -92,7 +92,7 @@ final_add_direct_to_dcg AS (
         -- Simplify the session_source Struct so that it is easy to use session_source.source in the reports
         session_source.first AS session_source
     FROM stage_add_last_non_direct
-),
+)
 
 -- Do not forget the WHERE clause
 -- In CTE stage_add_last_non_direct more data back to LAST_NON_DIRECT_LOOKBACK_DAYS is retrieved in order to find the

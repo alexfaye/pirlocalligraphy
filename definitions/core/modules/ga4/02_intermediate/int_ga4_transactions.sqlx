@@ -48,6 +48,7 @@ final_add_items_totals AS (
         ${config.TRANSACTION_TOTALS_UID} AS uid,
         property_id,
         stream_id,
+        platform,
         time,
         event_params.currency,
         event_params.coupon,
@@ -62,17 +63,17 @@ final_add_items_totals AS (
             ecommerce.tax_value,
             ecommerce.unique_items,
             ecommerce.refund_value_in_usd,
-            ecoomerce.refund_value
+            ecommerce.refund_value
         ) AS ecommerce,
 
         items,
 
         STRUCT(
             (SELECT SUM(i.quantity) FROM UNNEST(items) AS i) AS quantity,
-            (SELECT SUM(i.revenue) FROM UNNEST(items) AS i) AS item_revenue,
-            (SELECT SUM(i.revenue_in_usd) FROM UNNEST(items) AS i) AS item_revenue_in_usd,
-            (SELECT SUM(i.refund) FROM UNNEST(items) AS i) AS item_refund,
-            (SELECT SUM(i.refund_value_in_usd) FROM UNNEST(items) AS i) AS item_refund_in_usd,
+            (SELECT SUM(i.item_revenue) FROM UNNEST(items) AS i) AS item_revenue,
+            (SELECT SUM(i.item_revenue_in_usd) FROM UNNEST(items) AS i) AS item_revenue_in_usd,
+            (SELECT SUM(i.item_refund) FROM UNNEST(items) AS i) AS item_refund,
+            (SELECT SUM(i.item_refund_in_usd) FROM UNNEST(items) AS i) AS item_refund_in_usd,
             -- item numbers that has used coupons
             (SELECT COUNTIF(i.coupon IS NOT NULL AND i.coupon != '(not set)') FROM UNNEST(items) AS i) AS coupons,
             -- coupon numbers that has been used
