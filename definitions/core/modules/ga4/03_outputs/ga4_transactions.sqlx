@@ -133,7 +133,7 @@ final_add_totals AS (
         -- Using ABS() to make sure all the refunds are positive number
         STRUCT(
             item_totals.quantity - COALESCE(ABS(refund_info.refund_item_totals.quantity), 0) AS quantity,
-            item_totals.item_refund_in_usd - COALESCE(ABS(refund_info.refund_item_totals.item_refund_in_usd), 0) AS item_revenue_in_usd,
+            item_totals.item_revenue_in_usd - COALESCE(ABS(refund_info.refund_item_totals.item_refund_in_usd), 0) AS item_revenue_in_usd,
             item_totals.item_revenue - COALESCE(ABS(refund_info.refund_item_totals.item_refund), 0) AS item_revenue
         ) AS net_item_totals,
 
