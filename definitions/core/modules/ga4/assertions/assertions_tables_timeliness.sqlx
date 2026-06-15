@@ -41,22 +41,22 @@ THEN
                 ${ref("ga4_events")}
         )
             
-            SELECT AS STRUCT
-                COUNT(*),
-                STRING_AGG(CAST(table_name AS STRING), ", ")
-            FROM
-                max_dates
-            WHERE
-                max_date != (
-                    SELECT
-                        MAX(PARSE_DATE('%Y%m%d', event_date))
-                    FROM
-                        ${ref("events_*")}
-                    WHERE
-                        CONTAINS_SUBSTR(_TABLE_SUFFIX, 'fresh') IS FALSE
-                    AND
-                        CONTAINS_SUBSTR(_TABLE_SUFFIX, 'intraday') IS FALSE
-                )
+        SELECT AS STRUCT
+            COUNT(*),
+            STRING_AGG(CAST(table_name AS STRING), ", ")
+        FROM
+            max_dates
+        WHERE
+            max_date != (
+                SELECT
+                    MAX(PARSE_DATE('%Y%m%d', event_date))
+                FROM
+                    ${ref("events_*")}
+                WHERE
+                    CONTAINS_SUBSTR(_TABLE_SUFFIX, 'fresh') IS FALSE
+                AND
+                    CONTAINS_SUBSTR(_TABLE_SUFFIX, 'intraday') IS FALSE
+            )
     );
 
     IF check > expectations THEN
