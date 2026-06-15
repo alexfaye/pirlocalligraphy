@@ -1,0 +1,71 @@
+config {
+    type: "table",
+    schema: dataform.projectConfig.vars.QUALITY_DATASET,
+    description: "event id must be unique",
+    dependencies: ["assertion_logs",{name:"ga4_events"}],
+    tags: ["assertions"]
+}
+
+js {
+    const { helpers } = require("includes/core/helpers");
+    const config = helpers.getModuleConfig('ga4');
+}
+
+SELECT 'running assertion' AS placeholder
+
+pre_operations {
+    DECLARE assertion STRING DEFAULT 'event id uniqueness';
+    DECLARE check INT64;
+    DECLARE expectation INT64 DEFAULT 0;
+    DECLARE sample STRING;
+    DECLARE assertion_status STRING DEFAULT 'pass';
+    DECLARE error_msg STRING DEFAULT 'Yippee_ki_yay';
+
+    IF ${config.ASSERTIONS_EVENT_ID_UNIQUENESS}
+    THEN
+        SET (check, sample) = (
+            SELECT AS STRUCT 
+                COUNT(*),
+                STRING_AGG(CAST(event_id AS STRING), ", " LIMIT 5)
+            FROM (
+                SELECT
+                    event_id
+                FROM
+                    ${ref("ga4_events")}
+                WHERE
+                    event_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 DAY)
+                QUALIFY ROW_NUMBER() OVER(PARTITION BY event_id ORDER BY NULL) > 1
+            )
+        );
+
+        IF check > expectations THEN
+            SET assertion_status = 'fail';
+            SET error_msg = FORMAT("%D duplicated event_ids", check);
+        END IF;
+
+        INSERT INTO ${ref("assertion_logs")} 
+        VALUES (
+            CURRENT_TIMESTAMP(),
+            assertion,
+            '${ref("ga4_events")}',
+            expectations,
+            check,
+            sample,
+            assertion_status,
+            error_msg
+        );
+    END IF
+}
+
+post_operations {
+    IF ${config.ASSERTIONS_EVENT_ID_UNIQUENESS}
+    THEN
+        DROP TABLE ${self()};
+        
+        IF check > expectations THEN RAISE
+        USING MESSAGE = error_msg;
+        END IF;
+
+    END IF
+}
+
