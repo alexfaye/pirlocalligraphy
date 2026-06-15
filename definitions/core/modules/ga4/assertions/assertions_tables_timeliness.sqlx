@@ -1,0 +1,83 @@
+config {
+    type: "operations",
+    schema: dataform.projectConfig.vars.QUALITY_DATASET,
+    description: "checking if all the tables are up to date",
+    dependencies: ["assertion_logs", {name:"ga4_sessions"}, {name:"ga4_events"}, {name:"int_ga4_sessions"}],
+    tags: ["assertions"]
+}
+
+js {
+    const { helpers } = require("includes/core/helpers");
+    const config = helpers.getModuleConfig('ga4');
+}
+
+DECLARE assertion STRING DEFAULT 'tables timeliness';
+DECLARE check INT64;
+DECLARE expectation INT64 DEFAULT 0;
+DECLARE sample STRING;
+DECLARE assertion_status STRING DEFAULT 'pass';
+DECLARE error_msg STRING DEFAULT 'Yippee_ki_yay';
+
+IF ${config.ASSERTIONS_TABLES_TIMELINESS}
+THEN
+    SET (check, sample) = (
+        WITH max_dates AS (
+            SELECT 
+                'int_ga4_sessions' AS table_name,
+                MAX(session_date) AS max_date
+            FROM
+                ${ref("int_ga4_sessions")}
+            UNION ALL
+            SELECT
+                'ga4_session' AS table_name,
+                MAX(session_date) AS max_date
+            FROM
+                ${ref("ga4_sessions")}
+            UNION ALL
+            SELECT
+                'ga4_events' AS table_name,
+                MAX(event_date) AS max_date
+            FROM
+                ${ref("ga4_events")}
+        )
+            
+            SELECT AS STRUCT
+                COUNT(*),
+                STRING_AGG(CAST(table_name AS STRING), ", ")
+            FROM
+                max_dates
+            WHERE
+                max_date != (
+                    SELECT
+                        MAX(PARSE_DATE('%Y%m%d', event_date))
+                    FROM
+                        ${ref("events_*")}
+                    WHERE
+                        CONTAINS_SUBSTR(_TABLE_SUFFIX, 'fresh') IS FALSE
+                    AND
+                        CONTAINS_SUBSTR(_TABLE_SUFFIX, 'intraday') IS FALSE
+                )
+    );
+
+    IF check > expectations THEN
+        SET assertion_status = 'fail';
+        SET error_msg = FORMAT("%d tables are not up to date with ga4 raw event table", check);
+    END IF;
+
+    INSERT INTO ${ref("assertion_logs")}
+    VALUES (
+        CURRENT_TIMESTAMP(),
+        assertion,
+        '${ref("ga4_sessions")}',
+        expectations,
+        check,
+        sample,
+        assertion_status,
+        error_msg
+    );
+
+    IF check > expectations THEN RAISE
+    USING MESSAGE = error_msg;
+    END IF;
+
+END IF;
