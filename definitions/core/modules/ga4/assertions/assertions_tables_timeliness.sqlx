@@ -18,6 +18,7 @@ DECLARE sample STRING;
 DECLARE assertion_status STRING DEFAULT 'pass';
 DECLARE error_msg STRING DEFAULT 'Yippee_ki_yay';
 
+-- Make sure that the event tables and session table are up to date with the latest raw tables
 IF ${config.ASSERTIONS_TABLES_TIMELINESS}
 THEN
     SET (check, sample) = (
