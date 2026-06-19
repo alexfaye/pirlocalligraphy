@@ -1,0 +1,55 @@
+config {
+    type: "operations",
+    schema: dataform.projectConfig.vars.QUALITY_DATASET,
+    description: "user_pseudo_d should not be null",
+    dependencies: ["assertion_logs", {name:"ga4_events"}],
+    tags: ["assertions"]
+}
+
+js {
+    const { helpers } = require("includes/core/helpers");
+    const config = helpers.getModuleConfig('ga4');
+}
+
+DECLARE assertion STRING DEFAULT 'user_pseudo_id completeness';
+DECLARE check INT64;
+DECLARE expectation INT64 DEFAULT 0;
+DECLARE sample STRING;
+DECLARE assertion_status STRING DEFAULT 'pass';
+DECLARE error_msg STRING DEFAULT 'Yippee_ki_yay';
+
+IF ${config.ASSERTIONS_USER_PSEUDO_ID_COMPLETENESS}
+THEN
+    SET (check, sample) = (
+        SELECT AS STRUCT
+            COUNT(*),
+            STRING_AGG(CAST(event_id AS STRING), ", " LIMIT 5)
+        FROM ${ref("ga4_events")}
+        WHERE
+            event_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 DAY)
+        AND
+            user_pseudo_id IS NULL
+        );
+
+    IF check > expectations THEN
+        SET assertion_status = 'fail';
+        SET error_msg = FORMAT("%d null or not set transaction id", check);
+    END IF;
+
+    INSERT INTO ${ref("assertion_logs")}
+    VALUES (
+        CURRENT_TIMESTAMP(),
+        assertion,
+        '${ref("events_*")}',
+        expectations,
+        check,
+        sample,
+        assertion_status,
+        error_msg
+    );
+
+    IF check > expectations THEN RAISE
+    USING MESSAGE = error_msg;
+    END IF;
+
+END IF;
