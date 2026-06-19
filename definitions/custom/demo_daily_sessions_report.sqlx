@@ -77,6 +77,7 @@ final_daily_aggregation AS (
         platform,
         stream_id,
 
+        -- Standardlize the session fields
         COALESCE(session_campaign, '(not set)') AS session_campaign,
         COALESCE(session_source, '(not set)') AS session_source,
         COALESCE(session_medium, '(not set)') AS session_medium,
@@ -104,6 +105,7 @@ final_daily_aggregation AS (
         SUM(purchase) AS purchase,
         SUM(view_search_results) AS view_search_results,
 
+        -- Marketing tunnel conversions
         COUNT(DISTINCT IF(view_item > 0, session_id, NULL)) AS view_item_sessions,
         COUNT(DISTINCT IF (add_to_cart > 0, session_id, NULL)) AS add_to_cart_sessions,
         COUNT(DISTINCT IF(begin_checkout > 0, session_id, NULL)) AS begin_checkout_sessions,
