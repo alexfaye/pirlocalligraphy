@@ -24,7 +24,7 @@ THEN
     SET (check, sample) = (
         SELECT AS STRUCT
             COUNT(*),
-            STRING_AGG(CAST(session_id AS STRING), ", ", LIMIT 5)
+            STRING_AGG(CAST(session_id AS STRING), ", " LIMIT 5)
         FROM ${ref("ga4_sessions")}
         WHERE
             TIMESTAMP_DIFF(time.session_end_timestamp_utc, time_session_start_timestamp_utc, SECOND) < 0
@@ -50,7 +50,7 @@ THEN
     );
 
     IF check > expectations THEN RAISE
-    USING MESSAGE = error_msg
+    USING MESSAGE = error_msg;
     END IF;
 
 END IF;
