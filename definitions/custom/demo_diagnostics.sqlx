@@ -1,0 +1,153 @@
+config {
+    type: "table",
+    schema: dataform.projectConfig.vars.OUTPUTS_DATASET,
+    description: "What is in your GA4 - past 64 days"
+}
+
+js {
+  const { helpers } = require("includes/core/helpers");
+}
+
+pre_operations {
+    DECLARE lookback_days INT64 DEFAULT 64;
+}
+
+WITH source_daily_diagnostics AS (
+    SELECT
+        time.date_local,
+        DATE_TRUNC(time.date_local, WEEK) AS week_start_date,
+
+        -- Cardinality counts
+        COUNT(DISTINCT page.location) AS daily_unique_pages,
+        COUNT(DISTINCT collected_traffic_source.manual_source) AS daily_unique_sources,
+        COUNT(DISTINCT collected_traffic_source.manual_medium) AS daily_unique_mediums,
+        COUNT(DISTINCT collected_traffic_source.manual_campaign_name) AS daily_unique_campaign_names,
+
+        ARRAY_AGG(DISTINCT collected_traffic_source.manual_source IGNORE NULLS) AS daily_sources,
+        ARRAY_AGG(DISTINCT collected_traffic_source.manual_medium IGNORE NULLS) AS daily_mediums,
+        ARRAY_AGG(DISTINCT collected_traffic_source.manual_campaign_name IGNORE NULLS) AS daily_campaign_names,
+        ARRAY_AGG(DISTINCT device.web_info.hostname IGNORE NULLS) AS daily_hostnames,
+
+        COUNTIF(ecommerce.transaction_id IS NOT NULL) - COUNT(DISTINCT ecommerce.transaction_id) AS daily_duplicate_transactions,
+
+        -- ecommerce hits without item payload
+        COUNTIF(event_name = 'add_payment_info' AND ARRAY_LENGTH(items) = 0) AS add_payment_info_empty,
+        COUNTIF(event_name = 'add_shipping_info' AND ARRAY_LENGTH(items) = 0) AS add_shipping_info_empty,
+        COUNTIF(event_name = 'add_to_cart' AND ARRAY_LENGTH(items) = 0) AS add_to_cart_empty,
+        COUNTIF(event_name = 'add_to_wishlist' AND ARRAY_LENGTH(items) = 0) AS add_to_wishlist_empty,
+        COUNTIF(event_name = 'begin_checkout' AND ARRAY_LENGTH(items) = 0) AS begin_checkout_empty,
+        COUNTIF(event_name = 'purchase' AND ARRAY_LENGTH(items) = 0) AS purchase_empty,
+        COUNTIF(event_name = 'refund' AND ARRAY_LENGTH(items) = 0) AS refund_empty,
+        COUNTIF(event_name = 'remove_from_cart' AND ARRAY_LENGTH(items) = 0) AS remove_from_cart_empty,
+        COUNTIF(event_name = 'select_item' AND ARRAY_LENGTH(items) = 0) AS select_item_empty,
+        COUNTIF(event_name = 'select_promotion' AND ARRAY_LENGTH(items) = 0) AS select_promotion_empty,
+        COUNTIF(event_name = 'view_cart' AND ARRAY_LENGTH(items) = 0) AS view_cart_empty,
+        COUNTIF(event_name = 'view_item' AND ARRAY_LENGTH(items) = 0) AS view_item_empty,
+        COUNTIF(event_name = 'view_item_list' AND ARRAY_LENGTH(items) = 0) AS view_item_list_empty,
+        COUNTIF(event_name = 'view_promotion' AND ARRAY_LENGTH(items) = 0) AS view_promotion_empty,
+
+        -- ecommerce hits
+        COUNTIF(event_name = 'add_payment_info') AS add_payment_info,
+        COUNTIF(event_name = 'add_shipping_info') AS add_shipping_info,
+        COUNTIF(event_name = 'add_to_cart') AS add_to_cart,
+        COUNTIF(event_name = 'add_to_wishlist') AS add_to_wishlist,
+        COUNTIF(event_name = 'begin_checkout') AS begin_checkout,
+        COUNTIF(event_name = 'purchase') AS purchase,
+        COUNTIF(event_name = 'refund') AS refund,
+        COUNTIF(event_name = 'remove_from_cart') AS remove_from_cart,
+        COUNTIF(event_name = 'select_item') AS select_item,
+        COUNTIF(event_name = 'select_promotion') AS select_promotion,
+        COUNTIF(event_name = 'view_cart') AS view_cart,
+        COUNTIF(event_name = 'view_item') AS view_item,
+        COUNTIF(event_name = 'view_item_list') AS view_item_list,
+        COUNTIF(event_name = 'view_promotion') AS view_promotion,
+
+        -- ignored referrers
+        COUNT(DISTINCT IF(
+            event_params.ignore_referrer = 'true' AND net.reg_domain(page.referrer) != net.reg_domain(page.location),
+            net.host(page.referrer), NULL)
+            ) AS daily_unique_ignored_referrers,
+
+        ARRAY_AGG(DISTINCT IF(
+            event_params.ignore_referrer = 'true' AND net.reg_domain(page.referrer) != net.reg_domain(page.location),
+            net.host(page.referrer), NULL)
+        IGNORE NULLS) AS daily_ignored_referrers,
+
+        -- session start from self referral
+        COUNTIF(
+            event_name = 'session_start' AND net.reg_domain(page.referrer) = net.reg_domain(page.location)
+        ) AS daily_self_referral_sessions,
+
+        COUNTIF(event_name = 'session_start') AS daily_session_start,
+
+        -- cookieless hits
+        COUNTIF(user_pseudo_id IS NULL) AS daily_cookieless_hits,
+        COUNTIF(is_measurement_protocol_hit) AS daily_measurement_protocol_hits,
+        COUNTIF(session_id IS NULL) AS daily_sessionless_hits,
+        COUNT(*) AS daily_hits
+
+    FROM ${ref("ga4_events")}
+    WHERE event_date >= DATE_SUB(CURRENT_DATE(), INTERVAL lookback_days DAY)
+    GROUP BY ALL
+),
+
+-- weekly metrics
+stage_weekly_diagnostics AS (
+    SELECT
+        DATE_TRUNC(time.date_local, WEEK) AS week_start_date,
+        MIN(time.date_local) AS first_recorded_date,
+        COUNT(DISTINCT page.location) AS weekly_pages,
+        COUNT(DISTINCT collected_traffic_source.manual_source) AS weekly_sources,
+        COUNT(DISTINCT collected_traffic_source.manual_medium) AS weekly_mediums,
+        COUNT(DISTINCT collected_traffic_source.manual_campaign_name) AS weekly_campaign_names,
+        COUNT(DISTINCT device.web_info.hostname) AS weekly_hostnames,
+        COUNTIF(ecommerce.transaction_id IS NOT NULL) - COUNT(DISTINCT ecommerce.transaction_id) AS weekly_duplicate_transactions
+    FROM ${ref("ga4_events")}
+    WHERE
+        event_date >= DATE_SUB(CURRENT_DATE(), INTERVAL lookback_days DAY)
+    GROUP BY ALL
+    HAVING first_recorded_date = week_start_date
+),
+
+stage_join_in_weekly AS (
+    SELECT
+        d.*,
+        w.weekly_pages,
+        w.weekly_sources,
+        w.weekly_mediums,
+        w.weekly_campaign_names,
+        w.weekly_hostnames,
+        w.weekly_duplicate_transactions
+    FROM
+        source_daily_diagnostics AS d
+    LEFT JOIN
+        stage_weekly_diagnostics AS w
+    ON d.week_start_date = w.week_start_date
+    AND d.date_local = w.week_start_date
+),
+
+final_diagnostics AS (
+    SELECT
+        *,
+        SAFE_DIVIDE(add_payment_info_empty, add_payment_info) AS pct_add_payment_info_empty,
+        SAFE_DIVIDE(add_shipping_info_empty, add_shipping_info) AS pct_add_shipping_info_empty,
+        SAFE_DIVIDE(add_to_cart_empty, add_to_cart) AS pct_add_to_cart_empty,
+        SAFE_DIVIDE(add_to_wishlist_empty, add_to_wishlist) AS pct_add_to_wishlist_empty,
+        SAFE_DIVIDE(begin_checkout_empty, begin_checkout) AS pct_begin_checkout_empty,
+        SAFE_DIVIDE(purchase_empty, purchase) AS pct_purchase_empty,
+        SAFE_DIVIDE(refund_empty, refund) AS pct_refund_empty,
+        SAFE_DIVIDE(remove_from_cart_empty, remove_from_cart) AS pct_remove_from_cart_empty,
+        SAFE_DIVIDE(select_item_empty, select_item) AS pct_select_item_empty,
+        SAFE_DIVIDE(select_promotion_empty, select_promotion) AS pct_select_promotion_empty,
+        SAFE_DIVIDE(view_cart_empty, view_cart) AS pct_view_cart_empty,
+        SAFE_DIVIDE(view_item_empty, view_item) AS pct_view_item_empty,
+        SAFE_DIVIDE(view_item_list_empty, view_item_list) AS pct_view_item_list_empty,
+        SAFE_DIVIDE(view_promotion_empty, view_promotion) AS pct_view_promotion_empty,
+        SAFE_DIVIDE(weekly_duplicate_transactions, purchase) AS pct_duplicate_transactions,
+        SAFE_DIVIDE(daily_self_referral_sessions, daily_session_start) AS pct_self_referrals,
+        SAFE_DIVIDE(daily_cookieless_hits, daily_hits) AS pct_cookieless_hits
+    FROM stage_join_in_weekly
+)
+
+SELECT * FROM final_diagnostics
+
